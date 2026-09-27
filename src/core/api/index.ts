@@ -26,11 +26,20 @@ export function getRegistry(): Registry {
   return registry;
 }
 
-export function operationCatalogue(): { name: string; permissions: string[]; public: boolean; label: string }[] {
+export function operationCatalogue(): {
+  name: string;
+  permissions: string[];
+  public: boolean;
+  guarded: boolean;
+  label: string;
+}[] {
   return [...getRegistry().values()].map((op) => ({
     name: op.name,
-    permissions: op.perms,
-    public: op.public,
+    permissions: [...op.perms, ...op.permsAny],
+    public: Boolean(op.public),
+    // Payload-dependent guards are enforced by the registry like any other
+    // permission, so they count as an access rule for documentation and tests.
+    guarded: typeof op.guard === 'function',
     label: op.label,
   }));
 }

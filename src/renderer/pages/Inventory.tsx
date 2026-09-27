@@ -611,8 +611,8 @@ function StockModal({
     setType('out');
     setError('');
     if (action === 'in') {
-      void call<{ rows: { id: number; name: string }[] }>('inventory.suppliers.list', {})
-        .then((result) => setSuppliers(result.rows))
+      void call<{ id: number; name: string }[]>('suppliers.list', {})
+        .then(setSuppliers)
         .catch(() => setSuppliers([]));
     }
   }, [action, item]);

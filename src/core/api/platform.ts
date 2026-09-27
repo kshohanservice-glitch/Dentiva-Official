@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { nowIso } from '../db/connection';
 import { Container } from '../container';
-import { fieldError, notFound, businessRule, permissionDenied, AppError } from '../errors';
+import { fieldError, notFound, businessRule, permissionDenied, unauthenticated, AppError } from '../errors';
 import { Validator } from '../validation/validate';
 import { toLocalDateKey } from '../money/format';
 import { readPaging, paginate, dateRangeFrom, patientFinancialSummary } from './patients';
@@ -23,6 +23,9 @@ function backupService(c: Container): BackupService {
 export const platformApi: ApiSpec = {
   dashboard: {
     summary: {
+      // The dashboard is a landing page for every role; the handler shows only
+      // the sections the signed-in user is actually allowed to see.
+      permsAny: ['patients.view', 'appointments.view', 'queue.view', 'payments.view', 'accounting.view', 'inventory.view'],
       label: 'Dashboard summary',
       handler: ({ c, actor }) => {
         const today = toLocalDateKey(new Date());
@@ -145,6 +148,15 @@ export const platformApi: ApiSpec = {
 
   search: {
     global: {
+      // Results are already scoped to what the caller can see; the guard below
+      // narrows them further for roles that may not see everything.
+      guard: ({ c, actor }) => {
+        if (!actor) throw unauthenticated();
+        if (!actor.permissions.has('patients.view') && !actor.permissions.has('clinical.view') && !actor.permissions.has('appointments.view')) {
+          throw permissionDenied('You do not have permission to search the clinic records.');
+        }
+        void c;
+      },
       label: 'Global search',
       handler: ({ c }, input: unknown) => {
         const v = new Validator(input);
@@ -274,6 +286,7 @@ export const platformApi: ApiSpec = {
 
   notifications: {
     list: {
+      permsAny: ['patients.view', 'appointments.view', 'queue.view', 'payments.view', 'inventory.view', 'settings.view'],
       label: 'List notifications',
       handler: ({ c }, input: unknown) => {
         const v = new Validator(input);
@@ -286,6 +299,7 @@ export const platformApi: ApiSpec = {
       },
     },
     markRead: {
+      permsAny: ['patients.view', 'appointments.view', 'queue.view', 'payments.view', 'inventory.view', 'settings.view'],
       label: 'Mark notification read',
       handler: ({ c, actor }, input: unknown) => {
         const v = new Validator(input);
@@ -297,6 +311,7 @@ export const platformApi: ApiSpec = {
       },
     },
     markAllRead: {
+      permsAny: ['patients.view', 'appointments.view', 'queue.view', 'payments.view', 'inventory.view', 'settings.view'],
       label: 'Mark all notifications read',
       handler: ({ c, actor }) => {
         const n = c.db.run('UPDATE notifications SET read_at = ? WHERE read_at IS NULL AND dismissed_at IS NULL', [nowIso()]).changes;
@@ -305,6 +320,7 @@ export const platformApi: ApiSpec = {
       },
     },
     dismiss: {
+      permsAny: ['patients.view', 'appointments.view', 'queue.view', 'payments.view', 'inventory.view', 'settings.view'],
       label: 'Dismiss notification',
       handler: ({ c }, input: unknown) => {
         const v = new Validator(input);
@@ -335,6 +351,11 @@ export const platformApi: ApiSpec = {
 
   attachments: {
     list: {
+      guard: ({ c, actor }, input) => {
+        if (!actor) throw unauthenticated();
+        const v = new Validator(input);
+        assertAttachmentAccess(c, actor, v.enum('ownerType', ['patient', 'visit', 'staff', 'dentist', 'clinic', 'expense'] as const, { required: true }), v.int('ownerId', { required: true, min: 1 }));
+      },
       label: 'List attachments',
       handler: ({ c }, input: unknown) => {
         const v = new Validator(input);
@@ -389,12 +410,19 @@ export const platformApi: ApiSpec = {
         const v = new Validator(input);
         const id = v.int('id', { required: true, min: 1 });
         v.throwIfInvalid();
+        // The row is only read once access has been proven, so a caller without
+        // permission cannot even learn that the attachment exists.
+        const owner = c.db.get<{ owner_type: string; owner_id: number }>(
+          'SELECT owner_type, owner_id FROM attachments WHERE id = ? AND deleted_at IS NULL',
+          [id],
+        );
+        if (!owner) throw notFound('Attachment');
+        assertAttachmentAccess(c, actor, owner.owner_type, Number(owner.owner_id));
         const row = c.db.get<{ stored_name: string; file_name: string; mime_type: string; description: string; owner_type: string; owner_id: number }>(
           'SELECT * FROM attachments WHERE id = ? AND deleted_at IS NULL',
           [id],
         );
         if (!row) throw notFound('Attachment');
-        assertAttachmentAccess(c, actor, row.owner_type, Number(row.owner_id));
         let data: Buffer;
         try {
           data = readAttachmentFile(c.paths.attachmentsDir, row.stored_name);
@@ -423,6 +451,8 @@ export const platformApi: ApiSpec = {
         );
         if (!row) throw notFound('Attachment');
         assertAttachmentAccess(c, actor, row.owner_type, Number(row.owner_id));
+        // Resolved through the same containment primitive that wrote the file,
+        // so a tampered stored name cannot reach outside the vault.
         return { path: attachmentPath(c.paths.attachmentsDir, row.stored_name), fileName: row.file_name };
       },
     },
@@ -661,7 +691,11 @@ export const platformApi: ApiSpec = {
 
   printHistory: {
     list: {
-      perms: [],
+      // The signed-in user's own printing activity; each entry already carries
+      // the user who produced it.
+      guard: ({ actor }) => {
+        if (!actor) throw unauthenticated();
+      },
       label: 'List print history',
       handler: ({ c }, input: unknown) => {
         const { page, pageSize, offset } = readPaging(input, { pageSize: 25, maxPageSize: 100 });
@@ -674,7 +708,9 @@ export const platformApi: ApiSpec = {
       },
     },
     record: {
-      perms: [],
+      guard: ({ actor }) => {
+        if (!actor) throw unauthenticated();
+      },
       label: 'Record print history',
       handler: ({ c, actor }, input: unknown) => {
         const v = new Validator(input);

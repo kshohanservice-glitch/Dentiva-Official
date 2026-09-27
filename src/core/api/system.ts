@@ -140,6 +140,7 @@ export const systemApi: ApiSpec = {
     },
 
     flush: {
+      perms: ['settings.manage'],
       label: 'Flush pending work',
       handler: ({ c }) => {
         c.db.checkpoint();
