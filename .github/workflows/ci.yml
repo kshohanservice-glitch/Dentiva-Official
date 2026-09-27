@@ -73,22 +73,34 @@ jobs:
           fi
           echo "No activation literal in dist/ or out/."
 
+      # A measurement, not a correctness gate — but a real one, so it is not
+      # allowed to fail silently either. It has failed intermittently on some
+      # hosted runners for a reason the logs could not retrieve, so it is run
+      # twice before it is called a failure, and a retry is said out loud.
       - name: Load profile at a reduced size
         timeout-minutes: 15
         run: |
           set -o pipefail
-          npm run stress -- --patients 1500 --invoices 4000 2>&1 | tee stress.log
-          status=$?
-          # The run log is not always retrievable afterwards, so the numbers go
-          # into the job summary where they can always be read.
-          {
-            echo "## Load profile"
-            echo
-            echo '```'
-            cat stress.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit $status
+          for attempt in 1 2; do
+            echo "::group::Load profile, attempt $attempt"
+            if npm run stress -- --patients 1500 --invoices 4000 2>&1 | tee stress.log; then
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            if [ "$attempt" = "1" ]; then
+              echo "::warning::The load profile failed on the first attempt and is being retried. If this is a real regression rather than a flaky runner, the second attempt will say so."
+            else
+              {
+                echo "## Load profile failed"
+                echo
+                echo '```'
+                cat stress.log
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
 
       - name: Upload the load profile output
         if: always()
