@@ -69,6 +69,15 @@ export function ActivationScreen(): JSX.Element {
           </div>
         </div>
 
+        {app.status?.activationTampered ? (
+          <Callout tone="danger" title="The activation record could not be verified">
+            The local database says this installation was activated, but the record no longer matches the proof
+            written when it was activated. That usually means the data folder was edited, copied between
+            machines, or restored from an incomplete backup. Nothing has been changed. Contact your seller with
+            the machine reference below, or restore a Dentiva Pro backup of this computer.
+          </Callout>
+        ) : null}
+
         <Callout tone="info" title="One-time activation">
           Enter the 16-character activation code supplied with your purchase. The code is validated on this
           computer and stored permanently in the local database — it is never sent anywhere.

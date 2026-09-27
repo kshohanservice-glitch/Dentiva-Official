@@ -39,6 +39,7 @@ export const systemApi: ApiSpec = {
           setupCompleted,
           activated: activation.activated,
           activatedAt: activation.activatedAt,
+          activationTampered: activation.tampered === true,
           clinicName: clinic?.name ?? null,
           hasAdmin,
           integrity,
@@ -379,8 +380,13 @@ export const systemApi: ApiSpec = {
 
     logout: {
       label: 'Sign out',
-      handler: ({ c, actor }) => {
-        if (actor) c.audit(actor, { action: 'auth.logout', entity: 'user', entityId: actor.userId, summary: 'Signed out' });
+      handler: ({ c, actor, token }) => {
+        // The token is revoked, not merely forgotten by the interface. A copy
+        // left behind on a shared machine must not keep working.
+        if (actor) {
+          c.audit(actor, { action: 'auth.logout', entity: 'user', entityId: actor.userId, summary: 'Signed out' });
+          if (token) c.revokeSession(token);
+        }
         c.logger.security('auth.logout', { username: actor?.username });
         return { ok: true };
       },

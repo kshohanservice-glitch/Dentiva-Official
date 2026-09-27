@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 /**
  * Password hashing — scrypt (memory-hard KDF, RFC 7914 / NIST SP 800-132).
@@ -29,7 +29,13 @@ export function verifyPassword(password: string, stored: string): boolean {
     const p = Number(parts[3]);
     const salt = Buffer.from(parts[4] as string, 'base64');
     const expected = Buffer.from(parts[5] as string, 'base64');
-    if (!Number.isFinite(n) || !Number.isFinite(r) || !Number.isFinite(p) || salt.length === 0) return false;
+    // The cost parameters come out of the database and are therefore untrusted
+    // input. Without these bounds a hand-edited hash could request a trivial
+    // work factor and turn verification into a cheap oracle.
+    if (!Number.isInteger(n) || n < 2 || n > 1 << 20) return false;
+    if (!Number.isInteger(r) || r < 1 || r > 32) return false;
+    if (!Number.isInteger(p) || p < 1 || p > 16) return false;
+    if (salt.length < 8 || expected.length < 16 || expected.length > 128) return false;
     const actual = scryptSync(password.normalize('NFKC'), salt, expected.length, {
       N: n,
       r,
@@ -44,7 +50,16 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 export function needsRehash(stored: string): boolean {
   const parts = stored.split('$');
-  return parts.length !== 6 || parts[0] !== 'scrypt' || Number(parts[1]) !== N || Number(parts[2]) !== R || Number(parts[3]) !== P;
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return true;
+  // A cost weaker than the current default must be replaced, not trusted. A
+  // stronger one is kept, so raising the default later does not weaken anyone.
+  const n = Number(parts[1]);
+  const r = Number(parts[2]);
+  const p = Number(parts[3]);
+  if (!Number.isInteger(n) || n < N) return true;
+  if (!Number.isInteger(r) || r < R) return true;
+  if (!Number.isInteger(p) || p < P) return true;
+  return false;
 }
 
 export interface PasswordPolicy {
@@ -85,8 +100,4 @@ export function checkPasswordPolicy(
     }
   }
   return problems;
-}
-
-export function passwordFingerprint(password: string): string {
-  return createHash('sha256').update(password).digest('hex').slice(0, 12);
 }

@@ -20,6 +20,8 @@ export interface SystemStatus {
   setupCompleted: boolean;
   activated: boolean;
   activatedAt: string | null;
+  /** The stored activation record exists but no longer verifies. */
+  activationTampered?: boolean;
   clinicName: string | null;
   hasAdmin: boolean;
   integrity: { ok: boolean; message: string };
@@ -150,6 +152,7 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
         setupCompleted: false,
         activated: false,
         activatedAt: null,
+        activationTampered: false,
         clinicName: null,
         hasAdmin: false,
         integrity: { ok: false, message: error instanceof Error ? error.message : 'Startup failed.' },

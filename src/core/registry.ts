@@ -7,6 +7,8 @@ export interface OpContext {
   c: Container;
   actor: Actor | null;
   now: Date;
+  /** The session token this call arrived with, if any. */
+  token: string | null;
 }
 
 export interface OpSpec<I = unknown, O = unknown> {
@@ -144,6 +146,7 @@ export async function invokeOperation(
   }
 
   container.touchSession(options.sessionToken ?? null);
-  if (op.guard) op.guard({ c: container, actor, now: new Date() }, (input ?? {}) as never);
-  return op.handler({ c: container, actor, now: new Date() }, (input ?? {}) as never);
+  const context = { c: container, actor, now: new Date(), token: options.sessionToken ?? null };
+  if (op.guard) op.guard(context, (input ?? {}) as never);
+  return op.handler(context, (input ?? {}) as never);
 }
