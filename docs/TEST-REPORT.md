@@ -105,6 +105,32 @@ This is a real database with 8,000 patients, 24,000 invoices and 8,000 payments,
 operations. A single-clinic practice is unlikely to exceed this within several years, and every
 interaction a receptionist has is under 20 ms at that size.
 
+### 2.5 GitHub Actions CI
+
+CI has been executed on every push to this branch. Seven runs:
+
+| Run | Event | Result |
+|---|---|---|
+| 36308595064 | push | success |
+| 36308679905 | pull request | success |
+| 36309433700 | push | **failure** — load profile step |
+| 36309435651 | pull request | success |
+| 36309881087 | push | success |
+| 36309883354 | pull request | **failure** — load profile step |
+| 36310006047 | pull request | success |
+| 36310003437 | push | success |
+| 36310131156 | push | success |
+| 36310133429 | pull request | success |
+
+**The two failures were not diagnosed, and are recorded as unexplained.** Both were the load-profile
+step. The GitHub Actions log service and the artefact storage service are both unreachable from the
+environment this work was done in, so the runner output could not be retrieved either time — there is
+no way to state a cause without guessing. The identical command passes locally in 26 seconds and on
+every run since. The step now retries once and announces the retry rather than hiding it.
+
+The honest summary: **CI is green now, and it has failed twice for a reason nobody has been able to
+read.** That is not the same as "CI is reliable", and it should be watched.
+
 Reproduce with:
 
 ```

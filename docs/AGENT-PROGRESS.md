@@ -169,8 +169,8 @@ released.**
 | Load within budget | **YES** |
 | Dependencies reviewed, licensed and audited | **YES** |
 | Documentation complete (12 documents) | **YES** |
-| CI workflow | **YES** — written, never executed |
-| Release workflow | **YES** — written, never executed |
+| CI workflow | **YES** — executed on every push; green on the last four runs, with two earlier unexplained failures recorded in [TEST-REPORT.md §2.5](TEST-REPORT.md) |
+| Release workflow | **YES** — written, never executed. Needs to be on `main` before it can be dispatched. |
 | **Windows installer built** | **NO** |
 | **Clean-machine installation tested** | **NO** |
 | **Bengali verified on printed paper and PDF** | **NO** |
@@ -198,7 +198,9 @@ Recorded so the same walls are not hit twice.
 
 | Commit | What it did |
 |---|---|
-| *(unreleased)* | Boot-flow interface tests; session-token race fixed; unsaved-work drafts kept across auto-lock |
+| `fb1917e` | Load profile retried once, loudly; its output uploaded as an artefact |
+| `31bc4dd`, `918f960` | Load profile output moved to the job summary and an artefact, after two CI failures whose logs could not be retrieved |
+| *(earlier)* | Boot-flow interface tests; session-token race fixed; unsaved-work drafts kept across auto-lock |
 | `b27457b` | Windows build made possible (paths, preload copy, electron-builder config); architecture, database, security, printing, dependency-audit and test-report documents; icon |
 | `bea8aa8` | Bengali-on-paper verification; four print faults fixed; dead `/print.html` path removed |
 | `94ba547` | Development host restored; `scripts/stress.ts` load harness; dead package scripts removed; `@playwright/test` dropped |
