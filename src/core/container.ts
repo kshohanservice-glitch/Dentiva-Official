@@ -4,6 +4,13 @@ import { Logger, getLogger } from './log/logger';
 import { resolvePaths, type AppPaths } from './paths';
 import { SettingsService } from './services/settings';
 import { seedRolesAndPermissions, resolvePermissions, createSessionToken, type Actor } from './security/rbac';
+import {
+  ACTIVATION_PROOF_KEYS,
+  buildActivationRecord,
+  buildInstallProof,
+  readActivationRecord,
+  type ActivationState,
+} from './security/activation';
 import { writeAudit, type AuditInput } from './audit/audit';
 import { AppError } from './errors';
 import { ABSOLUTE_SESSION_HOURS } from '../shared/constants';
@@ -222,6 +229,41 @@ export class Container {
 
   buildSearchBlob(parts: (string | null | undefined)[]): string {
     return Container.normaliseForSearch(parts.filter(Boolean).join(' '));
+  }
+
+  // ── Activation ─────────────────────────────────────────────────────────
+
+  /**
+   * Reads the activation record and checks it against the per-install proof, so
+   * a hand-edited database is treated as unactivated rather than trusted.
+   */
+  activation(): ActivationState {
+    return readActivationRecord(
+      {
+        activated: this.settings.getState('activation.activated'),
+        activated_at: this.settings.getState('activation.activated_at'),
+        machine: this.settings.getState('activation.machine'),
+      },
+      {
+        secret: this.settings.getState(ACTIVATION_PROOF_KEYS.secret),
+        verifier: this.settings.getState(ACTIVATION_PROOF_KEYS.verifier),
+      },
+    );
+  }
+
+  /** Writes the activation record together with its proof. */
+  writeActivation(now: string): ActivationState {
+    const record = buildActivationRecord(now, this.machine);
+    const proof = buildInstallProof(now, this.machine);
+    this.db.transaction(() => {
+      this.settings.setState('activation.activated', record.activated);
+      this.settings.setState('activation.activated_at', record.activated_at);
+      this.settings.setState('activation.machine', record.machine);
+      this.settings.setState(ACTIVATION_PROOF_KEYS.secret, proof.secret);
+      this.settings.setState(ACTIVATION_PROOF_KEYS.verifier, proof.verifier);
+    });
+    this.settings.invalidate();
+    return { activated: true, activatedAt: now, machine: this.machine };
   }
 
   // ── Health ─────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DentivaApp } from '../../src/core';
-import { buildActivationRecord } from '../../src/core/security/activation';
+import { ACTIVATION_PROOF_KEYS, buildActivationRecord, buildInstallProof } from '../../src/core/security/activation';
 
 export interface TestApp {
   app: DentivaApp;
@@ -65,9 +65,16 @@ export function createTestApp(overrides: Record<string, unknown> = {}): TestApp 
 export async function markActivatedForTest(ctx: TestApp, machine = 'test-machine'): Promise<void> {
   const now = new Date().toISOString();
   const record = buildActivationRecord(now, machine);
-  ctx.app.container.settings.setState('activation.activated', record.activated);
-  ctx.app.container.settings.setState('activation.activated_at', record.activated_at);
-  ctx.app.container.settings.setState('activation.machine', record.machine);
+  // The same per-install proof a real activation writes, so tests exercise the
+  // real verification path rather than a shortcut.
+  const proof = buildInstallProof(now, machine);
+  ctx.app.container.db.transaction(() => {
+    ctx.app.container.settings.setState('activation.activated', record.activated);
+    ctx.app.container.settings.setState('activation.activated_at', record.activated_at);
+    ctx.app.container.settings.setState('activation.machine', record.machine);
+    ctx.app.container.settings.setState(ACTIVATION_PROOF_KEYS.secret, proof.secret);
+    ctx.app.container.settings.setState(ACTIVATION_PROOF_KEYS.verifier, proof.verifier);
+  });
   ctx.app.container.settings.invalidate();
 }
 

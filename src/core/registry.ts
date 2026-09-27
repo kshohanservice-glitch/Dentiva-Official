@@ -94,6 +94,19 @@ const PASSWORD_CHANGE_ALLOWLIST = new Set<string>([
   'system.status',
 ]);
 
+/**
+ * The only operations reachable on an installation that is not activated (or
+ * whose activation record no longer verifies). Everything else is closed, so a
+ * removed or edited activation record genuinely stops the application.
+ */
+const ACTIVATION_EXEMPT = new Set<string>([
+  'system.status',
+  'system.activate',
+  'system.activationStatus',
+  'system.about',
+  'setup.run',
+]);
+
 export async function invokeOperation(
   registry: Registry,
   container: Container,
@@ -105,6 +118,10 @@ export async function invokeOperation(
   if (!op) throw new AppError('not_found', `Unknown operation "${opName}".`);
 
   const actor = options.sessionToken ? container.resolveActor(options.sessionToken) : null;
+
+  if (!ACTIVATION_EXEMPT.has(opName) && !container.activation().activated) {
+    throw new AppError('not_activated', 'Activate Dentiva Pro before using this feature.');
+  }
 
   if (!op.public) {
     if (!actor) throw unauthenticated();

@@ -43,6 +43,27 @@ describe('bootstrap: fresh installation', () => {
     const status = await ctx.invoke('system.status');
     expect(status.activated).toBe(true);
     expect(status.activatedAt).toBeTruthy();
+
+    // The stored record proves itself, so flipping a single column in the
+    // database by hand is detected rather than believed.
+    ctx.app.container.settings.setState('activation.activated_at', '2020-01-01T00:00:00.000Z');
+    ctx.app.container.settings.invalidate();
+    const tampered = await ctx.invoke('system.status');
+    expect(tampered.activated).toBe(false);
+    expect((await ctx.invoke('system.activationStatus')).tampered).toBe(true);
+    // The activation gate is what closes, for a signed-in user and for a
+    // brand new one alike.
+    await expect(ctx.invoke('patients.list', {})).rejects.toMatchObject({ code: 'not_activated' });
+    await expect(ctx.invoke('settings.get')).rejects.toMatchObject({ code: 'not_activated' });
+    await expect(ctx.invoke('patients.list', {}, { token: null })).rejects.toMatchObject({ code: 'not_activated' });
+    // The screens that explain what to do stay reachable.
+    expect((await ctx.invoke('system.status')).activated).toBe(false);
+    expect((await ctx.invoke('system.activationStatus')).tampered).toBe(true);
+
+    // Restoring the genuine value puts it back exactly as it was.
+    ctx.app.container.settings.setState('activation.activated_at', status.activatedAt as string);
+    ctx.app.container.settings.invalidate();
+    expect((await ctx.invoke('system.status')).activated).toBe(true);
     // Re-activating an already-activated install is refused.
     await expect(ctx.invoke('system.activate', { code: '0000000000000000' })).rejects.toMatchObject({ code: 'conflict' });
 

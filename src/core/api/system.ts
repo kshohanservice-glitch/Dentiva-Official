@@ -4,7 +4,7 @@ import { AppError, conflict, fieldError, notFound, unauthenticated } from '../er
 import { Validator } from '../validation/validate';
 import { nowIso } from '../db/connection';
 import { hashPassword, verifyPassword, checkPasswordPolicy, DEFAULT_PASSWORD_POLICY, type PasswordPolicy } from '../security/password';
-import { verifyActivationCode, readActivationRecord, buildActivationRecord } from '../security/activation';
+import { verifyActivationCode } from '../security/activation';
 import { seedRolesAndPermissions } from '../security/rbac';
 import { applySettingsPatch, type SettingsShape } from '../services/settings';
 import { timestampSlug, writeFileAtomic } from '../services/files';
@@ -29,11 +29,7 @@ export const systemApi: ApiSpec = {
       label: 'Read application status',
       handler: ({ c }) => {
         const setupCompleted = c.settings.get('app.setupCompleted');
-        const activation = readActivationRecord({
-          activated: c.settings.getState('activation.activated'),
-          activated_at: c.settings.getState('activation.activated_at'),
-          machine: c.settings.getState('activation.machine'),
-        });
+        const activation = c.activation();
         const clinic = c.db.get<{ name: string }>('SELECT name FROM clinic WHERE id = 1');
         const hasAdmin = c.db.count("SELECT COUNT(*) AS n FROM users WHERE status = 'active'") > 0;
         const integrity = c.integrityCheck();
@@ -60,11 +56,7 @@ export const systemApi: ApiSpec = {
         const code = v.string('code', { required: true, max: 64 });
         v.throwIfInvalid('Enter the 16-digit activation code.');
 
-        const existing = readActivationRecord({
-          activated: c.settings.getState('activation.activated'),
-          activated_at: c.settings.getState('activation.activated_at'),
-          machine: c.settings.getState('activation.machine'),
-        });
+        const existing = c.activation();
         if (existing.activated) {
           throw conflict('This installation is already activated.');
         }
@@ -74,27 +66,17 @@ export const systemApi: ApiSpec = {
           throw fieldError([{ field: 'code', message: 'That activation code is not valid.' }], 'That activation code is not valid.');
         }
         const now = nowIso();
-        const record = buildActivationRecord(now, c.machine);
-        c.db.transaction(() => {
-          c.settings.setState('activation.activated', record.activated);
-          c.settings.setState('activation.activated_at', record.activated_at);
-          c.settings.setState('activation.machine', record.machine);
-        });
+        const record = c.writeActivation(now);
         c.logger.security('activation.success', { machine: c.machine, at: now });
         c.audit(null, { action: 'system.activate', entity: 'app_state', summary: 'Application activated' });
-        return { activated: true, activatedAt: record.activated_at };
+        return { activated: true, activatedAt: record.activatedAt };
       },
     },
 
     activationStatus: {
       public: true,
       label: 'Read activation status',
-      handler: ({ c }) =>
-        readActivationRecord({
-          activated: c.settings.getState('activation.activated'),
-          activated_at: c.settings.getState('activation.activated_at'),
-          machine: c.settings.getState('activation.machine'),
-        }),
+      handler: ({ c }) => c.activation(),
     },
 
     about: {
@@ -109,11 +91,7 @@ export const systemApi: ApiSpec = {
           email: APP.developerEmail,
           copyright: APP.copyright,
           license: 'Proprietary — licensed to the purchasing clinic. All rights reserved.',
-          activated: readActivationRecord({
-            activated: c.settings.getState('activation.activated'),
-            activated_at: c.settings.getState('activation.activated_at'),
-            machine: c.settings.getState('activation.machine'),
-          }).activated,
+          activated: c.activation().activated,
           dataDir: c.paths.root,
           platform: process.platform,
           arch: process.arch,

@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AppError } from '../errors';
 
 /**
@@ -83,21 +83,72 @@ export interface ActivationState {
   activated: boolean;
   activatedAt: string | null;
   machine: string | null;
+  /** Set when the stored record is present but does not verify. */
+  tampered?: boolean;
+}
+
+/**
+ * A per-install secret, generated once at activation. It is never shown, never
+ * logged and never leaves the machine; it only exists so the activation record
+ * cannot be forged by writing a single `1` into the database.
+ */
+/** Keys under which the proof material is kept in `app_state`. */
+export const ACTIVATION_PROOF_KEYS = {
+  secret: 'activation.install_secret',
+  verifier: 'activation.install_verifier',
+} as const;
+
+function installVerifier(secret: string, machine: string, activatedAt: string): string {
+  return createHmac('sha256', secret).update(`${NS}|${machine}|${activatedAt}`).digest('base64url').slice(0, 43);
 }
 
 /**
  * The persistent record written after a successful activation.
- * It stores no part of the code — only when and where it happened.
+ * It stores no part of the code — only when and where it happened, plus a
+ * verifier that proves the record has not been edited by hand.
  */
 export function buildActivationRecord(now: string, machine: string): { activated: string; activated_at: string; machine: string } {
   return { activated: '1', activated_at: now, machine };
 }
 
-/** Validate an activation record read back from storage. */
-export function readActivationRecord(record: Record<string, string> | undefined): ActivationState {
+/** Assembles the verifier to store alongside the record. */
+export function buildInstallProof(now: string, machine: string): { secret: string; verifier: string } {
+  const secret = randomBytes(32).toString('base64url');
+  return { secret, verifier: installVerifier(secret, machine, now) };
+}
+
+/**
+ * Validates an activation record read back from storage.
+ *
+ * A record with no verifier is treated as legacy-but-valid only when the
+ * install secret is also absent, which is the state a factory-fresh
+ * installation is in. As soon as a secret exists the record must verify.
+ */
+export function readActivationRecord(
+  record: Record<string, string> | undefined,
+  proof: { secret: string; verifier: string } = { secret: '', verifier: '' },
+): ActivationState {
   if (!record) return { activated: false, activatedAt: null, machine: null };
   if (record.activated !== '1') return { activated: false, activatedAt: null, machine: record.machine ?? null };
-  return { activated: true, activatedAt: record.activated_at ?? null, machine: record.machine ?? null };
+
+  const activatedAt = record.activated_at ?? null;
+  const machine = record.machine ?? null;
+
+  if (proof.secret && activatedAt && machine) {
+    const expected = installVerifier(proof.secret, machine, activatedAt);
+    if (!constantTimeEquals(expected, proof.verifier)) {
+      // The record claims to be activated but does not prove it. Treat the
+      // installation as unactivated rather than trusting an edited database.
+      return { activated: false, activatedAt: null, machine, tampered: true };
+    }
+  }
+  return { activated: true, activatedAt, machine };
+}
+
+/** The proof material read back from storage, for {@link readActivationRecord}. */
+export interface ActivationProof {
+  secret: string;
+  verifier: string;
 }
 
 export function assertActivationCode(input: string): void {

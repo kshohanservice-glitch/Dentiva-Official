@@ -409,7 +409,7 @@ describe('print history and diagnostics', () => {
     expect(status.hasAdmin).toBe(false);
     expect(status.activated).toBe(false);
     expect(readdirSync(join(ctx.dataDir, 'attachments'))).toHaveLength(0);
-    await expect(ctx.invoke('patients.list', {})).rejects.toMatchObject({ code: 'unauthenticated' });
+    await expect(ctx.invoke('patients.list', {})).rejects.toMatchObject({ code: 'not_activated' });
 
     // …and the safety backup really is a complete copy, checked straight off
     // disk rather than through the service that just lost its session.
