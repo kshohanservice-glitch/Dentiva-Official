@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useApp } from '../app/state';
 import { call, ApiError } from '../lib/api';
 import { Button, Callout, Checkbox, Field, IconButton, Modal, TextArea, useDebounced, useToast } from '../components/ui';
@@ -39,6 +39,17 @@ const newLine = (): LineDraft => ({
   discountPoisha: 0,
 });
 
+/** The parts of an invoice a receptionist would hate to retype. */
+interface InvoiceDraft {
+  patientLabel: string;
+  issueDate: string;
+  dueDate: string;
+  discountPercent: string;
+  taxPercent: string;
+  notes: string;
+  lines: { description: string; toothCode: string; qtyMilli: number; unitPricePoisha: number }[];
+}
+
 export function InvoiceForm({
   open, onClose, onSaved, patientId, visitId,
 }: {
@@ -59,8 +70,67 @@ export function InvoiceForm({
   const [taxPercent, setTaxPercent] = useState('0');
   const [notes, setNotes] = useState('');
   const [treatments, setTreatments] = useState<TreatmentRow[]>([]);
+  // An invoice is the longest thing anyone types in this application. If the
+  // machine locks halfway through six lines, none of that work is thrown away.
+  const invoiceDraft = useRef<InvoiceDraft>({
+    patientLabel: '', issueDate: todayKey(), dueDate: '', discountPercent: '0', taxPercent: '0', notes: '', lines: [],
+  });
+  const keepDraft = () => {
+    invoiceDraft.current = {
+      patientLabel, issueDate, dueDate, discountPercent, taxPercent, notes,
+      lines: lines.map((line) => ({
+        description: line.description, toothCode: line.toothCode,
+        qtyMilli: line.qtyMilli, unitPricePoisha: line.unitPricePoisha,
+      })),
+    };
+  };
   const [search, setSearch] = useState('');
   const [pickerLine, setPickerLine] = useState<string | null>(null);
+  const [recovered, setRecovered] = useState(false);
+  const restoredFor = useRef<string | null>(null);
+
+  // Restore a half-written invoice, once, and only if the form is being opened
+  // fresh rather than for a specific patient.
+  useEffect(() => {
+    if (!open || patientId || restoredFor.current) return;
+    restoredFor.current = 'asked';
+    void (async () => {
+      try {
+        const saved = await call<{ payload: InvoiceDraft | null }>('drafts.get', { kind: 'invoice-form' });
+        const draft = saved?.payload;
+        if (!draft || !draft.lines?.length) return;
+        if (!draft.lines.some((line) => line.description.trim() || line.unitPricePoisha > 0)) return;
+        restoredFor.current = String(saved.payload === draft ? 'restored' : 'asked');
+        setPatientLabel(draft.patientLabel);
+        setIssueDate(draft.issueDate || todayKey());
+        setDueDate(draft.dueDate);
+        setDiscountPercent(draft.discountPercent);
+        setTaxPercent(draft.taxPercent);
+        setNotes(draft.notes);
+        setLines(draft.lines.map((line) => ({ ...newLine(), ...line })));
+        setRecovered(true);
+      } catch {
+        /* an unreadable draft is not worth failing the form over */
+      }
+    })();
+  }, [open, patientId]);
+
+  // Save as the user works, so an auto-lock costs nothing.
+  useEffect(() => {
+    if (!open) return;
+    const hasContent = lines.some((line) => line.description.trim() || line.unitPricePoisha > 0);
+    if (!hasContent) return;
+    const handle = window.setTimeout(() => {
+      keepDraft();
+      void call('drafts.save', {
+        kind: 'invoice-form',
+        payload: JSON.stringify(invoiceDraft.current),
+      }).catch(() => undefined);
+    }, 800);
+    return () => window.clearTimeout(handle);
+    // `keepDraft` reads the current state through this effect's closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, patientLabel, issueDate, dueDate, discountPercent, taxPercent, notes, lines]);
   const [busy, setBusy] = useState(false);
   const [topError, setTopError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -170,6 +240,8 @@ export function InvoiceForm({
           discountPoisha: applyToLines ? line.discountPoisha : 0,
         })),
       });
+      // The invoice is real now; the unsaved copy has done its job.
+      void call('drafts.clear', { kind: 'invoice-form' }).catch(() => undefined);
       toast.success('Invoice created', `${created.invoice_no} · ${money(created.grand_total_poisha, app.prefs)}`);
       onSaved(created.id);
     } catch (caught) {
@@ -200,12 +272,33 @@ export function InvoiceForm({
             Total <strong className="mono">{money(totals.grandTotalPoisha, app.prefs)}</strong>
           </span>
           <span className="spacer" />
-          <Button onClick={onClose}>Cancel</Button>
+          {recovered ? (
+          <Button
+            onClick={() => {
+              void call('drafts.clear', { kind: 'invoice-form' }).catch(() => undefined);
+              setRecovered(false);
+              setLines([newLine()]);
+              setNotes('');
+              setDiscountPercent('0');
+              setTaxPercent('0');
+              setDueDate('');
+            }}
+          >
+            Discard
+          </Button>
+        ) : null}
+        <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon="save" loading={busy} onClick={() => void submit()}>Create invoice</Button>
         </>
       }
     >
       <div className="stack stack-3">
+        {recovered ? (
+          <Callout tone="info" title="Unsaved invoice recovered">
+            An invoice you had started was still here when the application locked, so it has been put back.
+            Press <strong>Discard</strong> to start a fresh one.
+          </Callout>
+        ) : null}
         {topError ? <Callout tone="danger">{topError}</Callout> : null}
 
         <div className="grid grid-3">

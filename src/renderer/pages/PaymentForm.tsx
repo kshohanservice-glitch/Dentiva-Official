@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useApp } from '../app/state';
 import { call, ApiError } from '../lib/api';
 import { Button, Callout, Checkbox, Field, Modal, Select, TextArea, TextInput, useToast } from '../components/ui';
@@ -50,6 +50,44 @@ export function PaymentForm({
   const [busy, setBusy] = useState(false);
   const [topError, setTopError] = useState('');
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  // Splitting a payment across four invoices is worth a moment of thought and
+  // an hour of typing. It is kept if the application locks part-way through.
+  const [recovered, setRecovered] = useState(false);
+  const restoredFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open || patientId || presetAllocations?.length || restoredFor.current) return;
+    restoredFor.current = 'asked';
+    void (async () => {
+      try {
+        const saved = await call<{ payload: { method: string; amountInput: string; reference: string; notes: string } | null }>(
+          'drafts.get',
+          { kind: 'payment-form' },
+        );
+        const draft = saved?.payload;
+        if (!draft || (!draft.amountInput && !draft.reference && !draft.notes)) return;
+        setMethod(draft.method || 'cash');
+        setAmountInput(draft.amountInput);
+        setReference(draft.reference);
+        setNotes(draft.notes);
+        setRecovered(true);
+      } catch {
+        /* an unreadable draft is not worth failing the form over */
+      }
+    })();
+  }, [open, patientId, presetAllocations]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!amountInput && !reference && !notes) return;
+    const handle = window.setTimeout(() => {
+      void call('drafts.save', {
+        kind: 'payment-form',
+        payload: JSON.stringify({ method, amountInput, reference, notes, type }),
+      }).catch(() => undefined);
+    }, 800);
+    return () => window.clearTimeout(handle);
+  }, [open, method, amountInput, reference, notes, type]);
 
   const amountPoisha = amountInput.trim() === '' ? null : takaInputToPoisha(amountInput);
   const allocatedTotal = rows.filter((r) => r.selected).reduce((sum, r) => sum + r.amountPoisha, 0);
@@ -168,6 +206,8 @@ export function PaymentForm({
         type,
         allocations: selected.map((r) => ({ invoiceId: r.invoiceId, amountPoisha: r.amountPoisha })),
       });
+      // The payment is real now; the unsaved copy has done its job.
+      void call('drafts.clear', { kind: 'payment-form' }).catch(() => undefined);
       toast.success(type === 'refund' ? 'Refund recorded' : 'Payment recorded', `${created.payment_no} · ${money(amountPoisha, app.prefs)}`);
       onSaved();
     } catch (caught) {
@@ -201,12 +241,30 @@ export function PaymentForm({
             ) : null}
           </span>
           <span className="spacer" />
+          {recovered ? (
+            <Button
+              onClick={() => {
+                void call('drafts.clear', { kind: 'payment-form' }).catch(() => undefined);
+                setRecovered(false);
+                setAmountInput('');
+                setReference('');
+                setNotes('');
+              }}
+            >
+              Discard
+            </Button>
+          ) : null}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon="save" loading={busy} onClick={() => void submit()}>Record</Button>
         </>
       }
     >
       <div className="stack stack-3">
+        {recovered ? (
+          <Callout tone="info" title="Unsaved payment recovered">
+            A payment you had started was still here when the application locked, so it has been put back.
+          </Callout>
+        ) : null}
         {topError ? <Callout tone="danger">{topError}</Callout> : null}
 
         {!patientId ? (

@@ -17,7 +17,7 @@ paper, and nothing has been tested on Windows. See [Quality gates](#quality-gate
 (clean-machine validation) are the remaining work, and both are blocked on the build environment.**
 
 Everything that can be built and verified in this environment has been built and verified. The
-application is feature-complete: 189 operations across 36 groups, 48 tables, 46 permissions, 20 screens,
+application is feature-complete: 193 operations across 37 groups, 48 tables, 46 permissions, 20 screens,
 6 printable document types. What remains cannot be done here, and the reason is recorded rather than
 worked around.
 
@@ -38,7 +38,7 @@ worked around.
 | 10 | Staff, users, RBAC, audit | Done. Service-boundary denial covered. |
 | 11 | Backup, restore, settings | Done. Create/validate/restore/guarded-delete covered, including attachment round-trip. |
 | 12 | Search, notifications, reports | Done. Global search, notification feed and payload-dependent report authorisation covered. |
-| 13 | Testing | Done. 93 tests across 8 files: unit, integration, interface and print. |
+| 13 | Testing | Done. 106 tests across 9 files: unit, integration, interface, boot flow and print. |
 | 14 | Security, licence and documentation audit | Done. Security suite, dependency audit, and all 12 mandatory documents. |
 | 15 | Packaging | **Code and configuration done; the installer has not been produced.** `electron-builder` config, release-preparation script, icon and both GitHub Actions workflows are in place. |
 | 16 | Clean-machine validation | **Not started.** Blocked on Phase 15. |
@@ -54,7 +54,7 @@ Every claim below was executed. The full log is in [TEST-REPORT.md](TEST-REPORT.
 |---|---|
 | `npm run typecheck` (renderer + core) | clean |
 | `npm run typecheck:node` (main + scripts) | clean |
-| `npm test` | **93 passed, 0 failed**, 8 files |
+| `npm test` | **106 passed, 0 failed**, 9 files |
 | `npm run build:renderer` | built, 560 kB bundle including both typefaces |
 | `npm run build:node` | clean |
 | `node scripts/package-release.mjs` | exit 0; licences collected, fonts confirmed, no activation literal in the build |
@@ -77,8 +77,8 @@ Every claim below was executed. The full log is in [TEST-REPORT.md](TEST-REPORT.
 
 ## What testing has actually caught
 
-Recorded because a suite that has never failed proves nothing. Twelve real defects were found and
-fixed; the first four typechecked cleanly and would all have shipped broken.
+Recorded because a suite that has never failed proves nothing. Sixteen real defects were found and
+fixed. The five that typechecked cleanly and would all have shipped broken are worth reading about.
 
 | # | Defect | Found by |
 |---|---|---|
@@ -93,7 +93,11 @@ fixed; the first four typechecked cleanly and would all have shipped broken.
 | 9 | Signing out did not revoke the presented session token. | Security tests |
 | 10 | A stored scrypt hash with weakened cost parameters was trusted. | Security tests |
 | 11 | `Inventory.tsx` called `inventory.suppliers.list`, which does not exist. | Contract tests |
-| 12 | `package.json` `main` pointed at a path the compiler never emits; the main process resolved its renderer HTML one level short; there was no electron-builder configuration at all. | Release-preparation script |
+| 12 | `package.json` `main` pointed at a path the compiler never emits; the main process resolved its renderer HTML one level short. | Release-preparation script |
+| 13 | There was no electron-builder configuration, so the installer would not have been named `Dentiva-Pro-Setup.exe` and the preload would not have been packaged. | Release-preparation script |
+| 14 | The API client read the session token from render state, so the first calls after sign-in went out with no token and the session was cleared again. | Boot-flow tests |
+| 15 | Unsaved form state went nowhere on auto-lock: the `drafts` table existed but only held prescription drafts. | Review against the requirements |
+| 16 | The browser preview opened `/print.html`, which has never existed. | Print work |
 
 ---
 
@@ -144,7 +148,7 @@ Electron packaging all differ. This is the single largest remaining risk.
 
 | Item | Why it is still open |
 |---|---|
-| Setup wizard, activation screen, sign-in screen and print-window chrome are not covered by the interface suite | They are reachable and reviewed, but no automated test renders them |
+| Print-window chrome is not covered by the interface suite | The print *documents* are; the preview toolbar around them is not. The five boot-flow screens are now covered by 13 tests |
 | No automated 1280×720 / 1920×1080 / 125–200% DPI sweep | Needs a real display; the checklist covers it manually |
 | No long soak test | The load profile reaches 31.6 MiB, not 5 GiB |
 | No third-party security or accessibility review | Not commissioned |
@@ -159,7 +163,7 @@ released.**
 | Gate | Status |
 |---|---|
 | Typecheck | **YES** |
-| Automated tests | **YES** — 93/93 |
+| Automated tests | **YES** — 106/106 |
 | Renderer and core build | **YES** |
 | Release preparation | **YES** |
 | Load within budget | **YES** |
@@ -194,6 +198,7 @@ Recorded so the same walls are not hit twice.
 
 | Commit | What it did |
 |---|---|
+| *(unreleased)* | Boot-flow interface tests; session-token race fixed; unsaved-work drafts kept across auto-lock |
 | `b27457b` | Windows build made possible (paths, preload copy, electron-builder config); architecture, database, security, printing, dependency-audit and test-report documents; icon |
 | `bea8aa8` | Bengali-on-paper verification; four print faults fixed; dead `/print.html` path removed |
 | `94ba547` | Development host restored; `scripts/stress.ts` load harness; dead package scripts removed; `@playwright/test` dropped |
@@ -211,7 +216,7 @@ Recorded so the same walls are not hit twice.
 npm ci
 npm run verify            # typecheck, test, build — all green at HEAD
 npm run dev               # run it in a browser against a real local core
-npm test                  # 93 tests
+npm test                  # 106 tests
 npm run stress            # load profile
 ```
 

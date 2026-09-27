@@ -35,7 +35,7 @@ for the security model see [SECURITY.md](SECURITY.md).
 │  │  Service core — the only place business rules live                   │ │
 │  │  src/core/                                                            │ │
 │  │    registry.ts     activation gate, session, per-operation rules     │ │
-│  │    api/            189 operations across 36 groups                   │ │
+│  │    api/            193 operations across 37 groups                   │ │
 │  │    db/             schema, migrations, connection                    │ │
 │  │    security/       scrypt, RBAC, activation verifier                 │ │
 │  │    services/       backup, settings, safe file handling              │ │
@@ -60,7 +60,7 @@ write to the database, and the main process never makes a business decision.
 
 ### 2.1 Operations
 
-The core exposes **189 operations in 36 groups**. They are declared as data, not as a class hierarchy:
+The core exposes **193 operations in 37 groups**. They are declared as data, not as a class hierarchy:
 
 ```ts
 // src/core/api/patients.ts
@@ -85,7 +85,7 @@ Because steps 1–3 run before the handler, a handler can never forget to check 
 returned by `operationCatalogue()` is what the contract tests assert against, so a new operation
 without a declared permission is a test failure rather than a silent hole.
 
-Of the 189 operations, 10 are `public` (status, setup, sign-in, activation) and 6 are `guarded`
+Of the 193 operations, 10 are `public` (status, setup, sign-in, activation) and 6 are `guarded`
 (operations whose permission depends on the payload, such as the report printer and the per-role
 attachment read).
 
@@ -230,6 +230,7 @@ is the only thing the window is allowed to load.
 | Integration | `tests/integration/` | Real operations against a real database in a temp directory |
 | Interface | `tests/ui/` | Real pages, real transport, real core, in jsdom |
 | Contract | `tests/unit/contract.test.ts` | Every renderer call resolves; permissions are declared; money stays integral |
+| Boot flow | `tests/ui/boot.test.tsx` | Activation, tampered activation, sign-in, lockout, forced password change, session revocation, draft recovery |
 | Security | `tests/integration/security.test.ts` | Hashing, sessions, lockout, activation, permission boundaries |
 | Print | `tests/ui/print.test.tsx` | Bengali reaches the page intact, in the right font, with a usable signature area |
 | Load | `scripts/stress.ts` | Latency at practice-sized data, against a real database |

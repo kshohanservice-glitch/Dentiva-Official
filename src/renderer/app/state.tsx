@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import { call, configureApi } from '../lib/api';
 import type { DisplayPrefs } from '../lib/format';
 
@@ -80,9 +80,19 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
   const [prefs, setPrefs] = useState<AppStateValue['prefs']>(DEFAULT_PREFS);
   const [locked, setLocked] = useState(false);
 
+  // The API client asks for the token through a ref rather than through
+  // render state. A page's own effects run before this provider's, so with a
+  // state-based provider the first calls after signing in went out with no
+  // token, came back unauthorised, and cleared the session that had just been
+  // established — leaving an empty sidebar and "this could not be loaded" on
+  // a perfectly good sign-in. The ref is written the moment the token changes.
+  const tokenRef = useRef<string | null>(token);
+  tokenRef.current = token;
+
   const setToken = useCallback((next: string | null) => {
     if (next) sessionStorage.setItem(TOKEN_KEY, next);
     else sessionStorage.removeItem(TOKEN_KEY);
+    tokenRef.current = next;
     setTokenState(next);
   }, []);
 
@@ -98,10 +108,10 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
 
   useEffect(() => {
     configureApi({
-      getToken: () => token,
+      getToken: () => tokenRef.current,
       onAuthLost: clearSession,
     });
-  }, [token, clearSession]);
+  }, [clearSession]);
 
   // Reflect preferences onto the document so CSS tokens switch instantly.
   useEffect(() => {

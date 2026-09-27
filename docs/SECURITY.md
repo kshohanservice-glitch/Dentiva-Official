@@ -110,7 +110,7 @@ stricter rules.
   hold more than one role, and their permissions are the union.
 - Four system roles are seeded: Administrator, Dentist, Receptionist and Accountant. The Administrator
   role cannot be deleted, and a clinic must always have at least one active administrator.
-- **Every one of the 189 operations declares the permissions it needs** (or a `guard` that resolves
+- **Every one of the 193 operations declares the permissions it needs** (or a `guard` that resolves
   them from the payload). The registry enforces this before the handler runs, so a handler cannot
   forget to check.
 - The renderer hides navigation the current role cannot use. That is a convenience only. The core is

@@ -35,7 +35,7 @@ Everything else is green. The detail is in [TEST-REPORT.md](TEST-REPORT.md).
 |---|---|---|---|:---:|---|
 | 1.1 | Typecheck, renderer and core | `npm run typecheck` | no output | ☐ | |
 | 1.2 | Typecheck, main and scripts | `npm run typecheck:node` | no output | ☐ | |
-| 1.3 | Tests pass | `npm test` | all pass, 0 failures | ☐ | |
+| 1.3 | Tests pass | `npm test` | all pass, 0 failures (106 at the time of writing) | ☐ | |
 | 1.4 | Renderer builds | `npm run build:renderer` | exit 0 | ☐ | |
 | 1.5 | Core and main build | `npm run build:node` | exit 0 | ☐ | |
 | 1.6 | Release preparation passes | `node scripts/package-release.mjs` | exit 0 | ☐ | |

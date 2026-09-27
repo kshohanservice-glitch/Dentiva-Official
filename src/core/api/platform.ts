@@ -349,6 +349,106 @@ export const platformApi: ApiSpec = {
     },
   },
 
+  /**
+   * Unsaved form state.
+   *
+   * A receptionist who is called away mid-entry must not lose the record, and
+   * the application auto-locks on idle. A draft belongs to the user who wrote
+   * it — nobody else can read or clear it, and it is never included in an
+   * export, a backup manifest or the audit log.
+   */
+  drafts: {
+    save: {
+      perms: [],
+      label: 'Save unsaved form state',
+      handler: ({ c, actor }, input: unknown) => {
+        if (!actor) throw unauthenticated('Sign in to save your work.');
+        const v = new Validator(input);
+        const kind = v.string('kind', { required: true, max: 60, label: 'Draft type' });
+        const entityId = v.optionalInt('entityId');
+        const payload = v.string('payload', { required: true, max: 400000, label: 'Draft' });
+        v.throwIfInvalid();
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          throw fieldError([{ field: 'payload', message: 'The saved form state was not valid.' }]);
+        }
+        if (parsed === null || typeof parsed !== 'object') {
+          throw fieldError([{ field: 'payload', message: 'The saved form state was not valid.' }]);
+        }
+        const now = nowIso();
+        c.db.run(
+          `INSERT INTO drafts (owner, user_id, kind, entity_id, payload, updated_at)
+           VALUES ('form', ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, kind, COALESCE(entity_id, 0))
+           DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+          [actor.userId, kind, entityId, payload, now],
+        );
+        // Deliberately not audited: this is half-written work, not a change to
+        // a record, and it must not fill the audit log with noise.
+        return { savedAt: now };
+      },
+    },
+    get: {
+      perms: [],
+      label: 'Read unsaved form state',
+      handler: ({ c, actor }, input: unknown) => {
+        if (!actor) throw unauthenticated('Sign in to read your work.');
+        const v = new Validator(input);
+        const kind = v.string('kind', { required: true, max: 60, label: 'Draft type' });
+        const entityId = v.optionalInt('entityId');
+        v.throwIfInvalid();
+        const row = c.db.get<{ payload: string; updated_at: string }>(
+          `SELECT payload, updated_at FROM drafts
+            WHERE user_id = ? AND kind = ? AND COALESCE(entity_id, 0) = ?`,
+          [actor.userId, kind, entityId ?? 0],
+        );
+        if (!row) return { payload: null, updatedAt: null };
+        try {
+          return { payload: JSON.parse(row.payload) as unknown, updatedAt: row.updated_at };
+        } catch {
+          // A draft that will not parse is worse than no draft: it would fail
+          // the form on every load. Remove it and start clean.
+          c.db.run(
+            `DELETE FROM drafts WHERE user_id = ? AND kind = ? AND COALESCE(entity_id, 0) = ?`,
+            [actor.userId, kind, entityId ?? 0],
+          );
+          return { payload: null, updatedAt: null };
+        }
+      },
+    },
+    list: {
+      perms: [],
+      label: 'List unsaved form state',
+      handler: ({ c, actor }) => {
+        if (!actor) return { rows: [] };
+        const rows = c.db.all<{ kind: string; entity_id: number | null; updated_at: string; size: number }>(
+          `SELECT kind, entity_id, updated_at, LENGTH(payload) AS size FROM drafts
+            WHERE user_id = ? ORDER BY updated_at DESC`,
+          [actor.userId],
+        );
+        return { rows };
+      },
+    },
+    clear: {
+      perms: [],
+      label: 'Discard unsaved form state',
+      handler: ({ c, actor }, input: unknown) => {
+        if (!actor) throw unauthenticated('Sign in to discard your work.');
+        const v = new Validator(input);
+        const kind = v.string('kind', { required: true, max: 60, label: 'Draft type' });
+        const entityId = v.optionalInt('entityId');
+        v.throwIfInvalid();
+        const changes = c.db.run(
+          `DELETE FROM drafts WHERE user_id = ? AND kind = ? AND COALESCE(entity_id, 0) = ?`,
+          [actor.userId, kind, entityId ?? 0],
+        ).changes;
+        return { cleared: changes };
+      },
+    },
+  },
+
   attachments: {
     list: {
       guard: ({ c, actor }, input) => {

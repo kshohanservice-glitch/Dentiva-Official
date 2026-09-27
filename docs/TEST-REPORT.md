@@ -16,7 +16,7 @@ verified and why. No claim in this document is based on an assumed or inferred r
 |---|---|---|
 | Typecheck (renderer + core, shared config) | `npm run typecheck` | **PASS** — no errors |
 | Typecheck (main + core + scripts) | `npm run typecheck:node` | **PASS** — no errors |
-| Automated tests | `npm test` | **PASS** — 93 tests, 8 files, 0 failures |
+| Automated tests | `npm test` | **PASS** — 106 tests, 9 files, 0 failures |
 | Renderer build | `npm run build:renderer` | **PASS** — built in 2.71s |
 | Core + main build | `npm run build:node` | **PASS** — no errors |
 | Load profile | `npm run stress` | **PASS** — all operations within budget |
@@ -49,9 +49,9 @@ Both configurations run with `strict`, `noUncheckedIndexedAccess` and
 ```
 $ npx vitest run
 
- Test Files  8 passed (8)
-      Tests  93 passed (93)
-   Duration  42.04s
+ Test Files  9 passed (9)
+      Tests  106 passed (106)
+   Duration  44.48s
 ```
 
 Every test runs against a **real** service core and a **real** SQLite database in a temporary
@@ -60,6 +60,7 @@ directory. There is no mocked database anywhere in this repository.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/integration/smoke.test.ts` | 9 | Fresh install, activation gate, setup, sign-in, lockout, first patient |
+| `tests/ui/boot.test.tsx` | 13 | Activation screen, tampered activation, sign-in, lockout, forced password change, session revocation, unsaved-work drafts |
 | `tests/integration/operations.test.ts` | 16 | Appointments, queue, inventory batches, accounting, attachments, print identity, passwords, search, notifications, data integrity |
 | `tests/integration/workflows.test.ts` | 14 | End-to-end money flow, Bengali storage/search/print/export, dental chart, permissions, backup and restore, CSV quoting, audit |
 | `tests/integration/clinical.test.ts` | 15 | Treatment catalogue, visits, invoice arithmetic, refunds, role administration, dentist records, print history, wipe safety |
@@ -133,9 +134,18 @@ found and fixed during this work.
 | 10 | A stored scrypt hash with weakened cost parameters was trusted | `tests/integration/security.test.ts` | A hand-edited hash turned verification into a cheap oracle |
 | 11 | `Inventory.tsx` called `inventory.suppliers.list`, which does not exist | `tests/unit/contract.test.ts` | The supplier selector threw when opened |
 | 12 | The browser preview opened `/print.html`, which does not exist | Manual review during the print work | Preview printing was a dead path |
+| 13 | `package.json` `main` pointed at `out/main/index.js`; the compiler emits `out/src/main/index.js`, and the main process resolved its renderer HTML one level short | Release-preparation script | The packaged application could not have started at all |
+| 14 | There was no electron-builder configuration | Release-preparation script | The installer would have been named by a default, not `Dentiva-Pro-Setup.exe`, and the preload would not have been included |
+| 15 | The API client read the session token from render state, so the first calls after signing in went out with no token | `tests/ui/boot.test.tsx` | **After every sign-in the sidebar came up empty and the dashboard said "This could not be loaded"** — the application looked broken to a receptionist on first use |
+| 16 | Unsaved form state was not kept anywhere: the `drafts` table existed but only held prescription drafts | Review against the requirements | An auto-lock threw away a half-typed patient record, a long invoice, or a split payment |
 
-Defects 1–4 are the clearest argument for the interface test suite: all four typechecked cleanly, and
-all four would have shipped broken.
+Defect 15 is the one that would have been reported on day one in a clinic: sign in, and the
+application comes up with an empty sidebar and "this could not be loaded" on the dashboard. It
+typechecked cleanly, it passed every unit test, and no code review would have caught it — a page's
+effects run before the provider's, so the first calls after sign-in went out with no token.
+
+Defects 1–4 and 13–16 are the clearest argument for the interface suite and the release script: all
+six typechecked cleanly, and all six would have shipped broken.
 
 ---
 
@@ -183,11 +193,12 @@ Fourteen pages are rendered in jsdom against the live core: Patients, Patient De
 Queue, Invoice Form, Reports, Inventory, Accounting, Staff, Settings, Backup, About, and the shell
 (chrome, navigation, and role-based hiding).
 
-**Not covered by the interface suite:** the first-run setup wizard, the activation screen, the sign-in
-screen, and the print window chrome. These are reachable and were reviewed, but they are not exercised
-by an automated test. That is a real gap.
+**Now covered by the interface suite:** the first-run setup gate, the activation screen (including a
+tampered activation record), the sign-in screen, the forced password change, session revocation, and
+draft recovery — 13 tests in `tests/ui/boot.test.tsx`.
 
-The print **documents** are covered; the print **window** (the preview chrome around them) is not.
+**Still not covered:** the print **window** chrome (the preview toolbar around the documents). The print
+*documents* are covered; the window that hosts them is not. That is a real, if narrow, gap.
 
 ---
 
@@ -264,7 +275,7 @@ and it is the single largest reason the product is not ready.
 
 ## 8. Honest statement of limits
 
-Software testing establishes the presence of defects, never their absence. This report says "93 tests
+Software testing establishes the presence of defects, never their absence. This report says "106 tests
 pass", not "Dentiva Pro is bug-free". The specific limits of this run are:
 
 - One platform (Linux), not the target platform (Windows).
@@ -273,7 +284,7 @@ pass", not "Dentiva Pro is bug-free". The specific limits of this run are:
 - No concurrent-user testing. The application is single-process and single-user by design; two
   Windows sessions on the same file were not tested.
 - No upgrade test from an older installer, because there is no older installer.
-- The interface suite covers 14 of 20 screens.
+- The interface suite covers 14 of 20 pages, plus the five boot-flow screens; the print window chrome is not covered.
 
 ---
 

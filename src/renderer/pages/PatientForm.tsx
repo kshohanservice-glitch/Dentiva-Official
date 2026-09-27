@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import { call, ApiError } from '../lib/api';
 import { useApp } from '../app/state';
 import { useRoute } from '../app/router';
@@ -7,7 +7,8 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/Icons';
 import { BLOOD_GROUP_OPTIONS, GENDER_OPTIONS } from '../../shared/constants';
-import { date } from '../lib/format';
+import { date, time } from '../lib/format';
+import { useDraft } from '../lib/drafts';
 import type { PatientFormProps } from './Patients';
 
 interface DuplicateRow {
@@ -46,8 +47,13 @@ export function PatientForm({ open, patient, onClose, onSaved }: PatientFormProp
   const route = useRoute();
   const toast = useToast();
   const editing = Boolean(patient);
+  // A new patient's details are the hardest thing in the practice to make a
+  // patient repeat, so they are kept if the machine locks mid-entry. An edit
+  // is never discarded, because the original record is still there.
+  const draft = useDraft('patient-form', EMPTY);
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [recovered, setRecovered] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [topError, setTopError] = useState('');
   const [duplicates, setDuplicates] = useState<DuplicateRow[]>([]);
@@ -90,10 +96,33 @@ export function PatientForm({ open, patient, onClose, onSaved }: PatientFormProp
     } else {
       setForm(EMPTY);
     }
+    setRecovered(null);
   }, [open, patient]);
 
+  // Adopt a recovered draft once, and only for a brand new patient. A draft
+  // from a previous session must never overwrite a freshly opened form.
+  const adopted = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || editing) return;
+    if (!draft.restored || draft.savedAt === null) return;
+    if (adopted.current === draft.savedAt) return;
+    adopted.current = draft.savedAt;
+    if (!draft.value.fullName.trim() && !draft.value.phone.trim()) return;
+    setForm(draft.value);
+    setRecovered(draft.savedAt);
+  }, [open, editing, draft.restored, draft.savedAt, draft.value]);
+
+  useEffect(() => {
+    if (editing) setRecovered(null);
+  }, [editing]);
+
   const set = <K extends keyof typeof EMPTY>(key: K, value: string) => {
-    setForm((c) => ({ ...c, [key]: value }));
+    setForm((c) => {
+      const next = { ...c, [key]: value };
+      draft.update(next);
+      return next;
+    });
+    setRecovered(null);
     setErrors((c) => {
       if (!c[key]) return c;
       const next = { ...c };
@@ -182,6 +211,7 @@ export function PatientForm({ open, patient, onClose, onSaved }: PatientFormProp
       notes: form.notes.trim(),
     };
     try {
+      draft.discard();
       if (editing && patient) {
         await call('patients.update', { id: patient.id, ...payload });
         toast.success('Patient updated', patient.patient_code);
@@ -238,6 +268,19 @@ export function PatientForm({ open, patient, onClose, onSaved }: PatientFormProp
             <span className="kbd">Ctrl</span> + <span className="kbd">S</span> to save
           </span>
           <span className="spacer" />
+          {recovered ? (
+            <Button
+              onClick={() => {
+                draft.discard();
+                setForm(EMPTY);
+                setRecovered(null);
+                setErrors({});
+                setTopError('');
+              }}
+            >
+              Start again
+            </Button>
+          ) : null}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon="save" loading={busy} onClick={() => void submit()}>
             {editing ? 'Save changes' : 'Create patient'}
@@ -246,6 +289,12 @@ export function PatientForm({ open, patient, onClose, onSaved }: PatientFormProp
       }
     >
       <div className="stack stack-3">
+        {recovered ? (
+          <Callout tone="info" title="Unsaved details recovered">
+            This form still had details typed into it at {time(recovered, app.prefs)} when the application locked, so
+            they have been put back. Use <strong>Start again</strong> below to clear them.
+          </Callout>
+        ) : null}
         {topError ? <Callout tone="danger">{topError}</Callout> : null}
 
         <div className="tabs" role="tablist" aria-label="Patient sections">

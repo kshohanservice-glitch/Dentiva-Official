@@ -57,6 +57,9 @@ describe('the interface only calls operations that exist', () => {
     'auth.me', 'auth.logout', 'auth.unlock', 'auth.changePassword',
     'auth.recentActivity', 'system.about', 'system.markClean', 'settings.get', 'paymentMethods.list',
     'roles.permissions', 'printerProfiles.list', 'attachments.read', 'attachments.path',
+    // A draft belongs to the person who wrote it, so any signed-in user may
+    // read and write their own — the service scopes it by user id.
+    'drafts.save', 'drafts.get', 'drafts.list', 'drafts.clear',
   ]);
 
   it('exposes every operation with a label and an explicit access rule', () => {

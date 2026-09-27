@@ -143,7 +143,7 @@ loopback development host, which does not exist in a packaged build.
 npm ci                 # install from the lockfile
 npm run dev            # run it in a browser against a real local core
 npm run verify         # typecheck, test and build
-npm test               # 93 tests
+npm test               # 106 tests
 npm run stress         # load profile against a real database
 ```
 
