@@ -74,7 +74,21 @@ jobs:
           echo "No activation literal in dist/ or out/."
 
       - name: Load profile at a reduced size
-        run: npm run stress -- --patients 1500 --invoices 4000
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          npm run stress -- --patients 1500 --invoices 4000 2>&1 | tee stress.log
+          status=$?
+          # The run log is not always retrievable afterwards, so the numbers go
+          # into the job summary where they can always be read.
+          {
+            echo "## Load profile"
+            echo
+            echo '```'
+            cat stress.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Upload the diagnostics bundle
         if: always()
