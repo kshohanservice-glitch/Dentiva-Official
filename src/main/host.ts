@@ -1,12 +1,12 @@
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { join, dirname, basename, extname } from 'node:path';
+import { dirname, basename, extname, join } from 'node:path';
 import type { DentivaApp } from '../core';
 import type { PrintController, PrintRequest } from './print';
 import { safeFileName } from '../core/services/files';
+import * as APP_PATHS from './paths';
 
-const __dirnameCompat = __dirname;
-const RENDERER_HTML = join(__dirnameCompat, '..', '..', 'dist', 'renderer', 'index.html');
+const { RENDERER_HTML } = APP_PATHS;
 
 export interface HostContext {
   app: DentivaApp;

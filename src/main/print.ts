@@ -2,9 +2,9 @@ import { BrowserWindow, screen } from 'electron';
 import { join, dirname } from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { PAPER_SIZES, type PaperSizeId } from '../shared/constants';
+import * as APP_PATHS from './paths';
 
-const __dirnameCompat = __dirname;
-const RENDERER_HTML = join(__dirnameCompat, '..', '..', 'dist', 'renderer', 'index.html');
+const { RENDERER_HTML, PRELOAD } = APP_PATHS;
 const MM_PER_INCH = 25.4;
 
 export interface PrintGeometry {
@@ -75,7 +75,7 @@ export class PrintController {
       width: 900,
       height: 1100,
       webPreferences: {
-        preload: join(__dirnameCompat, 'preload.cjs'),
+        preload: PRELOAD,
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,

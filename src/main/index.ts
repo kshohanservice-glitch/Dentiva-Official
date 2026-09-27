@@ -1,17 +1,16 @@
 import { app, BrowserWindow, ipcMain, shell, session, dialog, nativeTheme } from 'electron';
-import { join } from 'node:path';
 import { DentivaApp } from '../core';
 import { registerHostChannels } from './host';
+import * as APP_PATHS from './paths';
 import { PrintController } from './print';
 
-const __dirnameCompat = __dirname;
 const isDev = process.env.DENTIVA_DEV === '1' || !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 let dentiva: DentivaApp | null = null;
 let printController: PrintController | null = null;
 
-const RENDERER_HTML = join(__dirnameCompat, '..', '..', 'dist', 'renderer', 'index.html');
+const { RENDERER_HTML, APP_ICON, PRELOAD } = APP_PATHS;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -23,9 +22,9 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#f4f6f9',
     title: 'Dentiva Pro',
     autoHideMenuBar: true,
-    icon: join(__dirnameCompat, '..', '..', 'build', 'icon.ico'),
+    icon: APP_ICON,
     webPreferences: {
-      preload: join(__dirnameCompat, 'preload.cjs'),
+      preload: PRELOAD,
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,

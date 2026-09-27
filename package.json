@@ -9,13 +9,13 @@
   },
   "license": "UNLICENSED",
   "private": true,
-  "main": "out/main/index.js",
+  "main": "out/src/main/index.js",
   "scripts": {
     "dev": "npm run build:node && node scripts/dev.mjs",
     "dev:ui": "vite",
     "dev:api": "npm run build:node && node out/scripts/dev-host.js",
     "build": "npm run build:node && npm run build:renderer",
-    "build:node": "tsc -p tsconfig.node.json",
+    "build:node": "tsc -p tsconfig.node.json && node scripts/copy-preload.mjs",
     "build:renderer": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
@@ -26,7 +26,7 @@
     "test:watch": "vitest",
     "verify": "npm run typecheck && npm run typecheck:node && npm run test && npm run build",
     "stress": "npm run build:node && node out/scripts/stress.js",
-    "pack:win": "npm run build && electron-builder --win nsis --x64"
+    "pack:win": "npm run build && node scripts/package-release.mjs && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -48,5 +48,65 @@
     "typescript": "5.9.2",
     "vite": "7.1.5",
     "vitest": "3.2.4"
+  },
+  "build": {
+    "appId": "com.dentiva.pro",
+    "productName": "Dentiva Pro",
+    "copyright": "Copyright © 2026 Shohan Khan",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/src/**/*",
+      "dist/renderer/**/*",
+      "!**/*.map",
+      "!out/**/*.test.*",
+      "!**/node_modules/**/{test,tests,__tests__,example,examples,docs,doc}/**"
+    ],
+    "extraResources": [
+      {
+        "from": "THIRD-PARTY-NOTICES.txt",
+        "to": "THIRD-PARTY-NOTICES.txt"
+      },
+      {
+        "from": "build-manifest.json",
+        "to": "build-manifest.json"
+      },
+      {
+        "from": "build-licences",
+        "to": "LICENCES"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Dentiva-Pro-Setup.exe",
+      "publisherName": "Shohan Khan"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dentiva Pro",
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "en_US"
+      ],
+      "uninstallDisplayName": "Dentiva Pro ${version}"
+    },
+    "compression": "maximum",
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false
   }
 }

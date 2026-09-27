@@ -1,0 +1,175 @@
+name: Release
+
+# A tag is the only thing that can start a release. Pushing to main does not.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to package, without the leading v'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify before packaging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run typecheck:node
+      - run: npm test
+      - run: npm run build
+      - name: Resolve the version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+  package:
+    name: Build Dentiva-Pro-Setup.exe
+    needs: verify
+    # Windows, because NSIS and the Electron Windows build are Windows tools.
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set the version
+        run: |
+          $v = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.ref_name }}" -replace '^v', '' }
+          $p = Get-Content package.json -Raw | ConvertFrom-Json
+          $p.version = $v
+          $p | ConvertTo-Json -Depth 20 | Set-Content package.json -Encoding utf8
+          Write-Host "Packaging version $v"
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Prepare the release artefacts
+        run: node scripts/package-release.mjs
+
+      - name: Build the installer
+        run: npx electron-builder --win nsis --x64 --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = 'release\Dentiva-Pro-Setup.exe'
+          if (-not (Test-Path $installer)) {
+            Write-Error "::error::$installer was not produced"
+            exit 1
+          }
+          $item = Get-Item $installer
+          if ($item.Length -lt 40MB) {
+            Write-Error "::error::the installer is only $([math]::Round($item.Length/1MB,1)) MB, which cannot contain Chromium"
+            exit 1
+          }
+          Write-Host "Installer: $($item.Name) — $([math]::Round($item.Length/1MB,1)) MB"
+          Get-ChildItem release | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: Check the installer is a Windows PE executable
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes('release\Dentiva-Pro-Setup.exe')[0..1]
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            Write-Error '::error::Dentiva-Pro-Setup.exe is not a Windows executable'
+            exit 1
+          }
+          Write-Host 'MZ header confirmed.'
+
+      - name: Record the SHA-256 of the installer
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash 'release\Dentiva-Pro-Setup.exe' -Algorithm SHA256).Hash.ToLower()
+          "sha256  Dentiva-Pro-Setup.exe" | Out-File 'release\Dentiva-Pro-Setup.exe.sha256' -Encoding utf8
+          "version=${{ needs.verify.outputs.version }}" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
+          "built=$((Get-Date).ToUniversalTime().ToString('o'))" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
+          "commit=${{ github.sha }}" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
+          "sha256=$hash" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
+          Write-Host "sha256: $hash"
+
+      - name: Upload the installer as a workflow artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dentiva-Pro-Setup
+          path: release/
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    name: Publish the GitHub Release
+    needs: [verify, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The release page is nice to have. The artefact is already uploaded above,
+    # so a permissions or network problem here must not fail the whole run —
+    # the installer is still downloadable from this run's artefacts.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Dentiva-Pro-Setup
+          path: release
+
+      - name: Create the release and attach the installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.verify.outputs.version }}
+          name: Dentiva Pro ${{ needs.verify.outputs.version }}
+          body: |
+            Dentiva Pro ${{ needs.verify.outputs.version }}
+
+            Windows installer: **Dentiva-Pro-Setup.exe** (x64)
+
+            Verify the download before installing:
+
+            ```
+            Get-FileHash .\Dentiva-Pro-Setup.exe -Algorithm SHA256
+            ```
+
+            The SHA-256 for this build is in `Dentiva-Pro-Setup.exe.sha256` and
+            `release-info.txt`, attached alongside.
+
+            Dentiva Pro is an offline desktop application for dental clinics. It
+            makes no network connections at runtime and holds patient data only
+            on the clinic's own computer.
+          files: |
+            release/Dentiva-Pro-Setup.exe
+            release/Dentiva-Pro-Setup.exe.sha256
+            release/release-info.txt
+            release/THIRD-PARTY-NOTICES.txt
+            release/build-manifest.json
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
