@@ -1,0 +1,341 @@
+/* ==========================================================================
+   Dentiva Pro — Print / PDF document layer
+   One parameterised renderer drives every paper size. Geometry is injected
+   from the printer profile as CSS custom properties, so adding a paper size
+   never forks the layout.
+   ========================================================================== */
+
+.print-root {
+  --page-w: 210mm;
+  --page-h: 297mm;
+  --page-pad-x: 12mm;
+  --page-pad-y: 10mm;
+  --doc-font-scale: 1;
+
+  position: fixed;
+  inset: 0;
+  background: #5b6672;
+  overflow: auto;
+  padding: 16px;
+  font-family: var(--font-sans);
+  color: #0f1e2e;
+}
+
+.doc-page {
+  box-sizing: border-box;
+  width: var(--page-w);
+  min-height: var(--page-h);
+  margin: 0 auto;
+  padding: var(--page-pad-y) var(--page-pad-x);
+  background: #ffffff;
+  box-shadow: 0 6px 26px rgba(0, 0, 0, 0.35);
+  color: #0f1e2e;
+  font-size: calc(10.5pt * var(--doc-font-scale));
+  line-height: 1.42;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-page * { box-sizing: border-box; }
+.doc-page p { margin: 0 0 2mm; }
+.doc-page h1, .doc-page h2, .doc-page h3 { margin: 0; }
+
+/* Bengali (and any non-Latin) runs get the Bengali family so shaping is
+   correct in Chromium, in the PDF and on paper. */
+.doc-page .bn, .doc-page [lang='bn'] { font-family: var(--font-bengali); line-height: 1.65; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.doc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6mm;
+  padding-bottom: 3mm;
+  border-bottom: 1.2pt solid #0a8076;
+  margin-bottom: 4mm;
+}
+.doc-logo {
+  width: 17mm;
+  height: 17mm;
+  border-radius: 2.5mm;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.doc-logo--placeholder {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #34bcae, #0b6760);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15pt;
+  letter-spacing: -0.02em;
+}
+.doc-head-main { flex: 1 1 auto; min-width: 0; }
+.doc-clinic-name {
+  font-size: calc(15.5pt * var(--doc-font-scale));
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: #0b6760;
+  word-break: break-word;
+}
+.doc-clinic-tagline { font-size: calc(8.5pt * var(--doc-font-scale)); color: #4a5b6a; margin-top: 0.6mm; }
+.doc-clinic-contact {
+  font-size: calc(8.2pt * var(--doc-font-scale));
+  color: #4a5b6a;
+  line-height: 1.4;
+  margin-top: 1mm;
+  word-break: break-word;
+}
+.doc-head-side {
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 34mm;
+}
+.doc-title {
+  font-size: calc(10pt * var(--doc-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0a8076;
+}
+.doc-no { font-size: calc(9pt * var(--doc-font-scale)); color: #4a5b6a; margin-top: 0.8mm; }
+.doc-date { font-size: calc(8.5pt * var(--doc-font-scale)); color: #4a5b6a; margin-top: 0.8mm; }
+
+/* ── Patient strip ──────────────────────────────────────────────────────── */
+.doc-patient {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8mm 5mm;
+  padding: 2.4mm 3mm;
+  background: #f3f8f8;
+  border: 0.6pt solid #c9e4e1;
+  border-radius: 1.6mm;
+  margin-bottom: 3.5mm;
+  font-size: calc(8.8pt * var(--doc-font-scale));
+}
+.doc-patient .k { color: #5a6b7a; }
+.doc-patient .v { font-weight: 600; color: #0f1e2e; word-break: break-word; }
+.doc-patient--compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ── Prescription two-column body ───────────────────────────────────────── */
+.doc-rx {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 6mm;
+  align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.doc-rx__clinical { min-width: 0; }
+.doc-rx__meds { min-width: 0; }
+
+.doc-section { margin-bottom: 3.4mm; break-inside: avoid; }
+.doc-section-label {
+  font-size: calc(9pt * var(--doc-font-scale));
+  font-weight: 700;
+  color: #0a8076;
+  letter-spacing: 0.05em;
+  border-bottom: 0.6pt solid #d7e7e5;
+  padding-bottom: 0.8mm;
+  margin-bottom: 1.4mm;
+}
+.doc-section-body { font-size: calc(9.2pt * var(--doc-font-scale)); white-space: pre-wrap; word-break: break-word; }
+
+.doc-meds { display: flex; flex-direction: column; gap: 1.6mm; }
+.doc-med {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 3mm;
+  padding: 1.5mm 2mm;
+  border: 0.6pt solid #e0e8ec;
+  border-radius: 1.4mm;
+  break-inside: avoid;
+  font-size: calc(8.8pt * var(--doc-font-scale));
+}
+.doc-med__name { font-weight: 700; }
+.doc-med__meta { grid-column: 1 / -1; color: #4a5b6a; font-size: calc(8.2pt * var(--doc-font-scale)); margin-top: 0.5mm; word-break: break-word; }
+.doc-med__index {
+  display: inline-grid;
+  place-items: center;
+  width: 4.4mm;
+  height: 4.4mm;
+  border-radius: 50%;
+  background: #0a8076;
+  color: #fff;
+  font-size: calc(7pt * var(--doc-font-scale));
+  font-weight: 700;
+  margin-right: 1.6mm;
+  vertical-align: 1px;
+}
+.doc-timing { display: flex; gap: 1.4mm; flex-wrap: wrap; margin-top: 0.8mm; }
+.doc-timing span {
+  border: 0.5pt solid #cfd9de;
+  border-radius: 1mm;
+  padding: 0 1.2mm;
+  font-size: calc(7.4pt * var(--doc-font-scale));
+  color: #4a5b6a;
+}
+.doc-timing span.on { background: #e7f7f0; border-color: #a9e3ca; color: #067a56; font-weight: 600; }
+
+/* Narrow paper collapses the two-column layout into one column. */
+.doc-page[data-narrow='true'] .doc-rx { grid-template-columns: 1fr; gap: 3mm; }
+.doc-page[data-narrow='true'] .doc-patient { grid-template-columns: 1fr 1fr; }
+.doc-page[data-narrow='true'] .doc-head { flex-direction: column; gap: 2mm; }
+.doc-page[data-narrow='true'] .doc-head-side { text-align: left; min-width: 0; }
+
+/* ── Footer + signature ─────────────────────────────────────────────────── */
+.doc-foot {
+  margin-top: auto;
+  padding-top: 3mm;
+  border-top: 0.6pt solid #d7e7e5;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6mm;
+  break-inside: avoid;
+  min-height: 26mm;
+}
+.doc-foot-message { font-size: calc(8.2pt * var(--doc-font-scale)); color: #4a5b6a; max-width: 62%; line-height: 1.45; }
+.doc-foot-schedule { font-size: calc(7.8pt * var(--doc-font-scale)); color: #5a6b7a; margin-top: 1mm; }
+.doc-signature {
+  width: 55mm;
+  flex-shrink: 0;
+  text-align: center;
+}
+.doc-signature__image {
+  max-width: 42mm;
+  max-height: 16mm;
+  object-fit: contain;
+  margin: 0 auto 1mm;
+  display: block;
+}
+.doc-signature__line { border-top: 0.7pt solid #8595a3; padding-top: 1mm; }
+.doc-signature__name { font-size: calc(8.8pt * var(--doc-font-scale)); font-weight: 700; color: #0f1e2e; }
+.doc-signature__title { font-size: calc(7.6pt * var(--doc-font-scale)); color: #4a5b6a; line-height: 1.3; }
+.doc-signature__reg { font-size: calc(7pt * var(--doc-font-scale)); color: #8595a3; margin-top: 0.5mm; }
+
+/* ── Tables (invoice / report / receipt) ────────────────────────────────── */
+.doc-table { width: 100%; border-collapse: collapse; font-size: calc(8.8pt * var(--doc-font-scale)); }
+.doc-table th {
+  background: #0f766e;
+  color: #fff;
+  text-align: left;
+  padding: 1.6mm 2mm;
+  font-size: calc(8pt * var(--doc-font-scale));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.doc-table th.num, .doc-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.doc-table td { padding: 1.5mm 2mm; border-bottom: 0.4pt solid #e0e8ec; vertical-align: top; word-break: break-word; }
+.doc-table tbody tr:nth-child(even) { background: #f7fafb; }
+.doc-totals { margin-top: 3mm; margin-left: auto; width: 74mm; break-inside: avoid; }
+.doc-totals-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+  padding: 1.2mm 2mm;
+  font-size: calc(9pt * var(--doc-font-scale));
+  border-bottom: 0.4pt solid #e0e8ec;
+}
+.doc-totals-row--grand {
+  border-top: 1pt solid #0f766e;
+  border-bottom: 0;
+  margin-top: 1mm;
+  padding-top: 2mm;
+  font-size: calc(11pt * var(--doc-font-scale));
+  font-weight: 700;
+  color: #0b6760;
+}
+.doc-totals-row--due { color: #b42318; font-weight: 700; }
+.doc-totals-row--paid { color: #067a56; font-weight: 700; }
+
+.doc-stamp {
+  display: inline-block;
+  padding: 1mm 3mm;
+  border: 1pt solid currentColor;
+  border-radius: 1.2mm;
+  font-size: calc(8.4pt * var(--doc-font-scale));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.doc-stamp--paid { color: #067a56; }
+.doc-stamp--partial { color: #a45c07; }
+.doc-stamp--unpaid { color: #b42318; }
+
+.doc-band { display: flex; gap: 3mm; flex-wrap: wrap; margin-bottom: 3mm; }
+.doc-band-item { flex: 1 1 40mm; min-width: 0; }
+.doc-band-label { font-size: calc(7.4pt * var(--doc-font-scale)); text-transform: uppercase; letter-spacing: 0.06em; color: #8595a3; }
+.doc-band-value { font-size: calc(10.5pt * var(--doc-font-scale)); font-weight: 700; }
+
+.doc-note { font-size: calc(8pt * var(--doc-font-scale)); color: #4a5b6a; margin-top: 2mm; white-space: pre-wrap; }
+
+.doc-section-block { margin-top: 4mm; break-inside: avoid; }
+.doc-section-block h3 {
+  font-size: calc(9.5pt * var(--doc-font-scale));
+  color: #0a8076;
+  border-bottom: 0.6pt solid #d7e7e5;
+  padding-bottom: 1mm;
+  margin-bottom: 1.6mm;
+}
+
+.doc-chip-list { display: flex; flex-wrap: wrap; gap: 1.2mm; }
+.doc-chip {
+  border: 0.5pt solid #cfd9de;
+  border-radius: 1mm;
+  padding: 0.4mm 1.4mm;
+  font-size: calc(7.6pt * var(--doc-font-scale));
+}
+
+/* Compact chart for patient summaries. */
+.doc-chart { display: flex; flex-direction: column; gap: 1.6mm; }
+.doc-chart-row { display: flex; gap: 1.2mm; align-items: center; }
+.doc-chart-tooth {
+  width: 9mm;
+  height: 7mm;
+  border: 0.5pt solid #cfd9de;
+  border-radius: 1mm;
+  display: grid;
+  place-items: center;
+  font-size: calc(6.4pt * var(--doc-font-scale));
+  font-weight: 700;
+}
+.doc-chart-tooth[data-filled='true'] { background: #d2f5ee; border-color: #12a192; color: #0b6760; }
+
+/* ── Chromium print rules ───────────────────────────────────────────────── */
+@media print {
+  html, body { background: #fff !important; overflow: visible !important; height: auto !important; }
+  .print-root {
+    position: static;
+    background: #fff;
+    padding: 0;
+    overflow: visible;
+  }
+  .doc-page {
+    box-shadow: none;
+    margin: 0;
+    width: var(--page-w);
+    min-height: var(--page-h);
+  }
+  .doc-page[data-roll='true'] { min-height: 0; }
+  .no-print { display: none !important; }
+}
+
+/* On-screen preview toolbar */
+.print-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin: -16px -16px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #dbe3e9;
+}
+.print-toolbar .spacer { flex: 1 1 auto; }
+.print-hint { font-size: 12px; color: #5a6b7a; }

@@ -1,0 +1,54 @@
+{
+  "name": "dentiva-pro",
+  "productName": "Dentiva Pro",
+  "version": "1.0.0",
+  "description": "Dentiva Pro — premium offline-first dental clinic / dental practice management system for Windows.",
+  "author": {
+    "name": "Shohan Khan",
+    "email": "helloiamshohan@gmail.com"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "preview:api": "node out/scripts/dev-api.js",
+    "build:renderer": "vite build",
+    "build:node": "tsc -p tsconfig.node.json",
+    "build": "npm run build:node && npm run build:renderer",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --exclude 'tests/e2e/**'",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:ui": "vitest run tests/ui",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "stress": "node out/scripts/stress.js",
+    "pack:win": "npm run build && electron-builder --win nsis --x64",
+    "package": "node scripts/package-release.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource/noto-sans-bengali": "^5.3.0",
+    "node-sqlite3-wasm": "0.8.60"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.0",
+    "@types/node": "22.18.1",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "@vitejs/plugin-react": "5.0.4",
+    "electron": "38.3.0",
+    "electron-builder": "26.0.12",
+    "jsdom": "26.1.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "typescript": "5.9.2",
+    "vite": "7.1.5",
+    "vitest": "3.2.4"
+  }
+}
