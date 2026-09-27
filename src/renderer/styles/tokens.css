@@ -71,7 +71,12 @@
   --info-border: var(--accent-300);
 
   /* ── Typography ──────────────────────────────────────────────────────── */
-  --font-sans: 'Inter Variable', 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  /* Noto Sans Bengali closes the sans stack on purpose. Inter has no Bengali
+     and no taka sign (U+09F3), so without it the browser would fall through
+     to whatever the machine happened to have installed — which is how a
+     receipt comes out with a box where ৳ should be. The bundled subset
+     declares U+0980-09FE, so both the script and the sign resolve offline. */
+  --font-sans: 'Inter Variable', 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, 'Noto Sans Bengali', sans-serif;
   --font-bengali: 'Noto Sans Bengali', 'Nirmala UI', 'Vrinda', 'Shonar Bangla', var(--font-sans);
   --font-mono: 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 

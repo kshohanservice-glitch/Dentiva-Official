@@ -126,19 +126,19 @@ function createBrowserBridge(): HostBridge {
     printing: {
       listSystemPrinters: () => post<string[]>('printers', {}),
       preview: async (request) => {
-        const win = window.open('/print.html', '_blank', 'width=1000,height=1200');
+        const win = window.open('/#print', '_blank', 'width=1000,height=1200');
         if (!win) throw new Error('The browser blocked the print window. Allow pop-ups for this application.');
         win.postMessage({ type: 'dentiva:print-data', request }, window.location.origin);
         return { ok: true };
       },
       print: async (request) => {
-        const win = window.open('/print.html', '_blank', 'width=1000,height=1200');
+        const win = window.open('/#print', '_blank', 'width=1000,height=1200');
         if (!win) throw new Error('The browser blocked the print window. Allow pop-ups for this application.');
         win.postMessage({ type: 'dentiva:print-data', request, auto: 'print' }, window.location.origin);
         return { ok: true };
       },
       pdf: async (request) => {
-        const win = window.open('/print.html', '_blank', 'width=1000,height=1200');
+        const win = window.open('/#print', '_blank', 'width=1000,height=1200');
         if (!win) throw new Error('The browser blocked the print window. Allow pop-ups for this application.');
         win.postMessage({ type: 'dentiva:print-data', request, auto: 'pdf' }, window.location.origin);
         return {

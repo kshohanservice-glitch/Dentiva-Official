@@ -43,8 +43,26 @@
 .doc-page h1, .doc-page h2, .doc-page h3 { margin: 0; }
 
 /* Bengali (and any non-Latin) runs get the Bengali family so shaping is
-   correct in Chromium, in the PDF and on paper. */
-.doc-page .bn, .doc-page [lang='bn'] { font-family: var(--font-bengali); line-height: 1.65; }
+   correct in Chromium, in the PDF and on paper.
+
+   Two things are undone for them on purpose. The Latin headings carry tight
+   negative tracking, which pulls the two halves of a Bengali conjunct apart
+   in the shaped output, so tracking is reset. And a Bengali word is broken at
+   its own spaces: `overflow-wrap: anywhere` will only break inside a word
+   when the word genuinely cannot fit the column, which is what a long
+   unbroken address needs, while `word-break: break-word` would break every
+   word in the run. */
+.doc-page .bn,
+.doc-page [lang='bn'] {
+  font-family: var(--font-bengali);
+  line-height: 1.65;
+  letter-spacing: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  font-kerning: normal;
+  font-feature-settings: normal;
+  text-orientation: mixed;
+}
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .doc-head {
@@ -305,8 +323,21 @@
 .doc-chart-tooth[data-filled='true'] { background: #d2f5ee; border-color: #12a192; color: #0b6760; }
 
 /* ── Chromium print rules ───────────────────────────────────────────────── */
+/* Chromium discards background colours in print unless it is told not to,
+   which would take the header band, the table stripes and the dental chart
+   fills with it. It has to be set on the body, not only on the page element.
+   The page box itself is sized by the document geometry, so the browser's own
+   margins would only clip it. */
+@page { margin: 0; }
+
 @media print {
-  html, body { background: #fff !important; overflow: visible !important; height: auto !important; }
+  html, body {
+    background: #fff !important;
+    overflow: visible !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .print-root {
     position: static;
     background: #fff;

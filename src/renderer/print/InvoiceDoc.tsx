@@ -196,7 +196,9 @@ export function InvoiceDocument({ model, prefs }: { model: InvoiceModel; prefs: 
         signature={
           <div className="doc-signature">
             <div className="doc-signature__line" style={{ marginTop: 14 }}>
-              <div className="doc-signature__title">For {model.clinic.name ?? 'the clinic'}</div>
+              <div className="doc-signature__title">
+                For <Scripted>{model.clinic.name ?? 'the clinic'}</Scripted>
+              </div>
               <div className="doc-signature__reg">Authorised signature</div>
             </div>
           </div>

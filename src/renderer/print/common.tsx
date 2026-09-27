@@ -46,8 +46,11 @@ export function DocHeader({
       {logo ? (
         <img className="doc-logo" src={logo} alt="" />
       ) : (
+        // The monogram is a real glyph on the page, so a Bengali clinic name
+        // gets the Bengali family here too — otherwise the letter prints in
+        // the Latin fallback and comes out as a row of marks.
         <div className="doc-logo doc-logo--placeholder" aria-hidden="true">
-          {(clinic.name ?? 'C').trim().charAt(0).toUpperCase()}
+          <Scripted>{(clinic.name ?? 'C').trim().charAt(0).toUpperCase()}</Scripted>
         </div>
       )}
       <div className="doc-head-main">
