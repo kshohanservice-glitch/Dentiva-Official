@@ -1144,7 +1144,7 @@ function MaintenanceTab({
     setBusy('vacuum');
     try {
       const result = await call<{ ok: boolean; before: { page_count: number; freelist_count: number }; integrity: { ok: boolean; message: string } }>(
-        'system2.maintenance',
+        'maintenance.run',
       );
       toast.success('Maintenance finished', result.integrity.ok ? 'Integrity check passed.' : result.integrity.message);
       onDone();
@@ -1189,7 +1189,7 @@ function MaintenanceTab({
   const wipe = async () => {
     setBusy('wipe');
     try {
-      await call('system2.wipe', { confirmation: 'DELETE' });
+      await call('maintenance.wipe', { confirmation: 'DELETE' });
       toast.success('All data erased', 'The application will return to first-time setup.');
       onDone();
       window.setTimeout(() => window.location.reload(), 900);

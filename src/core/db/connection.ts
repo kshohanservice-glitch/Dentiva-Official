@@ -108,6 +108,21 @@ export class Db {
   }
 
   /** Consistent snapshot of the live database — used by the backup engine. */
+  /**
+   * Rebuilds the database file in place. SQLite refuses to VACUUM while any
+   * prepared statement is still open, and refuses to run it inside a
+   * transaction, so both are handled here rather than at each call site.
+   */
+  vacuum(): void {
+    if (this.inTransaction()) throw new AppError('database_error', 'Maintenance cannot run while a change is in progress.');
+    this.releaseStatements();
+    try {
+      this.raw.exec('VACUUM');
+    } finally {
+      this.clearCache();
+    }
+  }
+
   vacuumInto(targetFile: string): void {
     if (this.inTransaction()) throw new AppError('backup_error', 'A backup cannot be taken while a change is in progress.');
     this.releaseStatements();

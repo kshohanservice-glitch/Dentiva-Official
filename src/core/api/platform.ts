@@ -1,3 +1,4 @@
+import { mkdirSync, rmSync } from 'node:fs';
 import { nowIso } from '../db/connection';
 import { Container } from '../container';
 import { fieldError, notFound, businessRule, permissionDenied, AppError } from '../errors';
@@ -1021,18 +1022,35 @@ export const platformApi: ApiSpec = {
     },
   },
 
-  system2: {
+  maintenance: {
     wipe: {
       perms: ['system.wipe'],
       label: 'Erase all application data',
       handler: ({ c, actor }, input: unknown) => {
         const v = new Validator(input);
-        const confirmation = v.string('confirmation', { required: true, max: 40 });
-        v.throwIfInvalid();
-        if (confirmation !== 'DELETE') {
+        // Compared without trimming: erasing the entire database must not be one
+        // stray keystroke away from a paste that gained a space in the clipboard.
+        const confirmation = v.raw('confirmation');
+        if (typeof confirmation !== 'string' || confirmation !== 'DELETE') {
           throw fieldError([{ field: 'confirmation', message: 'Type DELETE to confirm.' }], 'Type DELETE to confirm.');
         }
-        c.audit(actor, { action: 'system.wipe', entity: 'app_state', summary: 'All application data erased' });
+        // A safety copy first: erasing every record is the one operation in the
+        // product that cannot be undone from inside it.
+        let preWipeBackup: string | null = null;
+        try {
+          preWipeBackup = backupService(c).create('pre-restore', actor).name;
+        } catch (error) {
+          throw new AppError(
+            'backup_error',
+            `A safety backup could not be created, so nothing was erased. Check the backup folder and try again. (${(error as Error).message})`,
+            { cause: error },
+          );
+        }
+
+        c.audit(actor, {
+          action: 'system.wipe', entity: 'app_state', summary: 'All application data erased',
+          metadata: { preWipeBackup },
+        });
         const tables = c.db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
         c.db.transaction(() => {
           for (const table of tables) {
@@ -1040,21 +1058,23 @@ export const platformApi: ApiSpec = {
             c.db.run(`DELETE FROM "${table.name}"`);
           }
         });
-        c.db.run('VACUUM');
         c.settings.invalidate();
         c.settings.set('app.setupCompleted', false);
         c.db.run("DELETE FROM app_state WHERE key LIKE 'activation.%'");
-        return { ok: true };
+        c.settings.invalidate();
+        // Patient files are part of the clinic's data, not a cache.
+        rmSync(c.paths.attachmentsDir, { recursive: true, force: true });
+        mkdirSync(c.paths.attachmentsDir, { recursive: true });
+        c.db.vacuum();
+        return { ok: true, preWipeBackup };
       },
     },
-    maintenance: {
+    run: {
       perms: ['settings.manage'],
       label: 'Database maintenance',
       handler: ({ c, actor }) => {
         const before = c.db.get<{ page_count: number; freelist_count: number }>('PRAGMA page_count');
-        c.db.transaction(() => {
-          c.db.run('VACUUM');
-        });
+        c.db.vacuum();
         const integrity = c.integrityCheck();
         c.audit(actor, { action: 'system.maintenance', entity: 'app_state', summary: 'Database maintenance run' });
         return { ok: integrity.ok, before, integrity };

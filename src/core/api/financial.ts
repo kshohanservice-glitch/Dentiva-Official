@@ -461,6 +461,7 @@ export const financialApi: ApiSpec = {
         if (!c.db.get('SELECT id FROM patients WHERE id = ? AND deleted_at IS NULL', [patientId])) throw notFound('Patient');
 
         const allowOverpayment = c.settings.get('financial.allowOverpayment');
+        const isRefund = type === 'refund';
         let allocatedTotal = 0;
         const touched: number[] = [];
         for (const alloc of allocations) {
@@ -471,17 +472,39 @@ export const financialApi: ApiSpec = {
           if (!invoice) throw notFound(`Invoice #${alloc.invoiceId}`);
           if (invoice.patient_id !== patientId) throw businessRule('A payment can only be allocated to invoices for the same patient.');
           if (invoice.status === 'cancelled') throw businessRule(`Invoice ${invoice.invoice_no} is cancelled and cannot receive a payment.`);
-          const balance = Number(invoice.grand_total_poisha) - Number(invoice.paid_poisha);
-          if (alloc.amountPoisha > balance && !allowOverpayment) {
-            throw businessRule(
-              `The allocation of ৳${(alloc.amountPoisha / 100).toFixed(2)} exceeds the outstanding balance of ৳${(balance / 100).toFixed(2)} on invoice ${invoice.invoice_no}.`,
-            );
+
+          // A receipt fills an invoice up; a refund takes money back off one. Each
+          // is bounded by a different amount, so each is checked against the one
+          // that actually applies.
+          if (isRefund) {
+            const collected = Number(invoice.paid_poisha);
+            if (alloc.amountPoisha > collected) {
+              throw businessRule(
+                `The refund of ৳${(alloc.amountPoisha / 100).toFixed(2)} is more than the ৳${(collected / 100).toFixed(2)} collected on invoice ${invoice.invoice_no}.`,
+              );
+            }
+            if (Number(invoice.grand_total_poisha) - (collected - alloc.amountPoisha) < 0) {
+              throw businessRule(`A refund cannot take invoice ${invoice.invoice_no} below zero.`);
+            }
+          } else {
+            const balance = Number(invoice.grand_total_poisha) - Number(invoice.paid_poisha);
+            if (alloc.amountPoisha > balance && !allowOverpayment) {
+              throw businessRule(
+                `The allocation of ৳${(alloc.amountPoisha / 100).toFixed(2)} exceeds the outstanding balance of ৳${(balance / 100).toFixed(2)} on invoice ${invoice.invoice_no}.`,
+              );
+            }
           }
           allocatedTotal += alloc.amountPoisha;
           touched.push(invoice.id);
         }
-        if (type === 'refund') {
+        if (isRefund) {
           if (allocations.length === 0) throw fieldError([{ field: 'allocations', message: 'Select the invoice this refund applies to.' }]);
+          if (allocatedTotal !== amount) {
+            throw fieldError(
+              [{ field: 'allocations', message: `The refund of ৳${(amount / 100).toFixed(2)} must be allocated in full across invoices.` }],
+              'The refund must be fully allocated.',
+            );
+          }
         } else if (allocatedTotal > amount) {
           throw fieldError([{ field: 'allocations', message: 'The allocated amounts are greater than the payment amount.' }]);
         } else if (allocatedTotal < amount && !allowOverpayment) {
