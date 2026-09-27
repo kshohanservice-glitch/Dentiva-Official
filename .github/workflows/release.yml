@@ -73,6 +73,23 @@ jobs:
       - name: Prepare the release artefacts
         run: node scripts/package-release.mjs
 
+      # The notices and the build manifest belong in the installer output
+      # directory, because that directory is what gets uploaded and attached to
+      # the release. They are written to the repository root by the script,
+      # since a source archive has no release/ directory to write into.
+      - name: Collect the release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          foreach ($f in @('THIRD-PARTY-NOTICES.txt', 'build-manifest.json')) {
+            if (-not (Test-Path $f)) {
+              Write-Error "::error::$f was not produced by the release preparation"
+              exit 1
+            }
+            Copy-Item $f release -Force
+          }
+          Get-ChildItem release | Select-Object Name, Length | Format-Table -AutoSize
+
       # The run log is not always retrievable after a run, so a build failure
       # is also raised as an annotation, which always is.
       - name: Build the installer
@@ -166,9 +183,13 @@ jobs:
           path: release
 
       - name: Create the release and attach the installer
+        id: publish
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.verify.outputs.version }}
+          # The tag is the trigger, so the release must land on the tag that
+          # already exists. Writing "1.0.0" here would create a second, untagged
+          # release next to it.
+          tag_name: v${{ needs.verify.outputs.version }}
           name: Dentiva Pro ${{ needs.verify.outputs.version }}
           body: |
             Dentiva Pro ${{ needs.verify.outputs.version }}
@@ -196,3 +217,18 @@ jobs:
           fail_on_unmatched_files: true
           draft: false
           prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
+
+      - name: Confirm the release exists and carries the installer
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          tag="v${{ needs.verify.outputs.version }}"
+          echo "::group::Release $tag"
+          if gh release view "$tag" --json tagName,isDraft,url,assets \
+               --jq '"tag: \(.tagName)  draft: \(.isDraft)  \(.url)"' 2>&1; then
+            gh release view "$tag" --json assets --jq '.assets[] | "  \(.name)  \((.size/1048576*10|floor)/10) MB"'
+          else
+            echo "::error title=The GitHub Release was not created::$tag does not exist. The installer is still on this run's artefacts." 
+          fi
+          echo "::endgroup::"
