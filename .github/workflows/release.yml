@@ -153,13 +153,66 @@ jobs:
       - name: Record the SHA-256 of the installer
         shell: pwsh
         run: |
-          $hash = (Get-FileHash 'release\Dentiva-Pro-Setup.exe' -Algorithm SHA256).Hash.ToLower()
-          "sha256  Dentiva-Pro-Setup.exe" | Out-File 'release\Dentiva-Pro-Setup.exe.sha256' -Encoding utf8
-          "version=${{ needs.verify.outputs.version }}" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
-          "built=$((Get-Date).ToUniversalTime().ToString('o'))" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
-          "commit=${{ github.sha }}" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
-          "sha256=$hash" | Out-File 'release\release-info.txt' -Encoding utf8 -Append
+          $ErrorActionPreference = 'Stop'
+          $exe = 'release\Dentiva-Pro-Setup.exe'
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+
+          # The standard `<digest>  <name>` form, which is what `sha256sum -c`
+          # and `Get-FileHash` users expect. A file that does not contain the
+          # digest is worse than no file: it looks like a checksum and is not
+          # one. It is written with .NET rather than Out-File, because Out-File
+          # on the Windows runner prepends a UTF-8 BOM that breaks every
+          # checksum tool that reads the file.
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) 'release\Dentiva-Pro-Setup.exe.sha256'),
+            "$hash  Dentiva-Pro-Setup.exe`n",
+            (New-Object System.Text.UTF8Encoding $false))
+
+          $info = @(
+            "product=Dentiva Pro"
+            "version=${{ needs.verify.outputs.version }}"
+            "built=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+            "commit=${{ github.sha }}"
+            "installer=Dentiva-Pro-Setup.exe"
+            "bytes=$((Get-Item $exe).Length)"
+            "sha256=$hash"
+          ) -join "`n"
+          [System.IO.File]::WriteAllText(
+            (Join-Path (Get-Location) 'release\release-info.txt'),
+            "$info`n",
+            (New-Object System.Text.UTF8Encoding $false))
+
           Write-Host "sha256: $hash"
+
+      # A checksum nobody can check is decoration. The file is read back, the
+      # digest is confirmed to be a real 64-character hash, and it is confirmed
+      # to be the hash of the installer that is about to be published.
+      - name: Verify the checksum file before it is published
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) 'release\Dentiva-Pro-Setup.exe.sha256'))
+          $actual = (Get-FileHash 'release\Dentiva-Pro-Setup.exe' -Algorithm SHA256).Hash.ToLower()
+
+          if ($text.Length -lt 65) {
+            Write-Error "::error::the checksum file is only $($text.Length) characters; it cannot contain a 64-character SHA-256. Contents: '$text'"
+            exit 1
+          }
+          if ($text -notmatch '^([0-9a-f]{64})') {
+            Write-Error "::error::the checksum file does not begin with a SHA-256 digest. Contents: '$text'"
+            exit 1
+          }
+          if ($Matches[1] -ne $actual) {
+            Write-Error "::error::the recorded checksum $($Matches[1]) is not the installer's checksum $actual"
+            exit 1
+          }
+          if ($text -notmatch 'Dentiva-Pro-Setup\.exe') {
+            Write-Error "::error::the checksum file does not name the file it checks. Contents: '$text'"
+            exit 1
+          }
+          Write-Host "Checksum verified: $actual"
+          Write-Host "release-info.txt:"
+          [System.IO.File]::ReadAllLines((Join-Path (Get-Location) 'release\release-info.txt')) | ForEach-Object { Write-Host "  $_" }
 
       - name: Upload the installer as a workflow artefact
         uses: actions/upload-artifact@v4

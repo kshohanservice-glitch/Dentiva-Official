@@ -148,7 +148,8 @@ Every release attempt is recorded, including the failures.
 | 36310526904 | `v1.0.0` → `a83d50b` | **failure** — packaging | The Windows build produced nothing: `win.publisherName` is not an electron-builder option (defect 17) |
 | 36310672953 | `v1.0.0` → `7d2ccb2` | **failure** — packaging | Diagnostic build, run to recover the cause of the above. It failed identically, and printed the cause as a check annotation |
 | 36310881319 | `v1.0.0` → `97a91f7` | **failure** — publication | **The Windows installer built and passed its own checks.** The publish step then failed on its own mistakes (defect 18) |
-| 36311134819 | `v1.0.0` → `fb30765` | see §9 | Publication fixes applied |
+| 36311134819 | `v1.0.0` → `fb30765` | green — **but wrong** | The installer built again, and a release was created — on the tag `v`. The run passed. (defect 19) |
+| 36311479523 | `v1.0.0` → `49e718d` | see §9 | Version plumbing and publication guards applied |
 
 The recovery is worth recording as a process point, because it is unusual. Runs 1 and 2 could not be
 diagnosed by reading their logs: the GitHub Actions log service and the artefact storage service are
@@ -207,6 +208,20 @@ Each of those five checks was confirmed to fail when the corresponding value was
 
 Defect 18 is the lesson that a green build is not a released product. Two separate mistakes in the
 publication step, neither of which affects the installer, each sufficient on its own to fail the run.
+
+Defect 19 is worse, and it is why that run is recorded as green *and* wrong. The verify job's `version`
+output was **always** empty: the step wrote `value=1.0.0` to `GITHUB_OUTPUT` while the job output read
+`steps.version.outputs.version`, so the two names never met. Every downstream consumer therefore
+received an empty string, and the release was created on the tag `v` — a published release attached to a
+meaningless tag, with `release-info.txt` recording no version. The run stayed green throughout, because
+the publish step was marked `continue-on-error` and nothing afterwards checked whether the release
+existed at all.
+
+A green run is a claim, and that run made a false one. The fix is not a retry: the version is now
+rejected if it is empty or is not `MAJOR.MINOR.PATCH` before the Windows build begins, and the final
+step fails the run unless a release exists on the expected tag carrying the installer, its checksum and
+its release info — naming whichever is missing. The `continue-on-error` is gone, and the tag `v` that
+run created has been deleted.
 
 Defect 15 is the one that would have been reported on day one in a clinic: sign in, and the
 application comes up with an empty sidebar and "this could not be loaded" on the dashboard. It
