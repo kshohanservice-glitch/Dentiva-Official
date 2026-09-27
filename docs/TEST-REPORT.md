@@ -139,6 +139,33 @@ npm run stress -- --patients 20000 --invoices 60000
 npm run stress -- --json                # machine-readable
 ```
 
+### 2.6 Release builds
+
+Every release attempt is recorded, including the failures.
+
+| Run | Tag → commit | Result | What it proves |
+|---|---|---|---|
+| 36310526904 | `v1.0.0` → `a83d50b` | **failure** — packaging | The Windows build produced nothing: `win.publisherName` is not an electron-builder option (defect 17) |
+| 36310672953 | `v1.0.0` → `7d2ccb2` | **failure** — packaging | Diagnostic build, run to recover the cause of the above. It failed identically, and printed the cause as a check annotation |
+| 36310881319 | `v1.0.0` → `97a91f7` | **failure** — publication | **The Windows installer built and passed its own checks.** The publish step then failed on its own mistakes (defect 18) |
+| 36311134819 | `v1.0.0` → `fb30765` | see §9 | Publication fixes applied |
+
+The recovery is worth recording as a process point, because it is unusual. Runs 1 and 2 could not be
+diagnosed by reading their logs: the GitHub Actions log service and the artefact storage service are
+both unreachable from this environment, and no amount of retrying changed that. The cause was recovered
+instead by making the build raise its own failure as a **check annotation**, which is served by a
+different API and is always retrievable. That is a hack, and it is recorded as one: it exists because
+the normal channel was unavailable, and the correct permanent answer is a working log store.
+
+Two conclusions follow, and both are stated without hedging:
+
+- **A Windows installer has been built.** Run 36310881319 produced `Dentiva-Pro-Setup.exe` and that
+  job passed, which includes checking that the file exists, is over 40 MB, and begins with the `MZ`
+  header of a Windows executable. This is evidence that the build works; it is **not** evidence that
+  the installer runs.
+- **A release is not the same as a successful run.** Run 36310881319 built the product and still
+  failed, for two reasons that had nothing to do with the product. Both are fixed in run 36311134819.
+
 ---
 
 ## 3. What the tests actually caught
@@ -164,6 +191,22 @@ found and fixed during this work.
 | 14 | There was no electron-builder configuration | Release-preparation script | The installer would have been named by a default, not `Dentiva-Pro-Setup.exe`, and the preload would not have been included |
 | 15 | The API client read the session token from render state, so the first calls after signing in went out with no token | `tests/ui/boot.test.tsx` | **After every sign-in the sidebar came up empty and the dashboard said "This could not be loaded"** — the application looked broken to a receptionist on first use |
 | 16 | Unsaved form state was not kept anywhere: the `drafts` table existed but only held prescription drafts | Review against the requirements | An auto-lock threw away a half-typed patient record, a long invoice, or a split payment |
+| 17 | `win.publisherName` is not an electron-builder 26 option — it is not an NSIS option either | **The first Windows release build (run 36310526904)** | There was no installer at all. The build died on a schema check before producing a single byte |
+| 18 | The publish step asked for `release/THIRD-PARTY-NOTICES.txt` and `release/build-manifest.json`, which the release script writes to the repository root, with `fail_on_unmatched_files: true` | Release run 36310881319 | The installer built, and then publication failed anyway — twice over, since the step also named the release `1.0.0` when the tag was `v1.0.0` |
+
+Defect 17 is the one worth dwelling on. The packaging configuration passed every local gate,
+typechecked, and passed the release-preparation script — because nothing in the local toolchain
+validates the electron-builder configuration at all. It is validated only when electron-builder runs,
+which happens on a Windows runner, minutes into a CI run. The run then failed, and the log could not
+be retrieved from the environment this work was done in, so for a full cycle the cause was unknown.
+It is now known: the option is not in electron-builder's schema. `scripts/package-release.mjs` compiles
+that schema with ajv and fails the build locally if the configuration does not match, and separately
+checks the things a schema cannot express — the installer's name, the shortcuts, the refusal to delete
+a clinic's data on uninstall, and that `package.json` `main` is a path the build actually produces.
+Each of those five checks was confirmed to fail when the corresponding value was broken.
+
+Defect 18 is the lesson that a green build is not a released product. Two separate mistakes in the
+publication step, neither of which affects the installer, each sufficient on its own to fail the run.
 
 Defect 15 is the one that would have been reported on day one in a clinic: sign in, and the
 application comes up with an empty sidebar and "this could not be loaded" on the dashboard. It

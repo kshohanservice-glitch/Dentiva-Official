@@ -37,10 +37,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            v='${{ inputs.version }}'
           else
-            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            v="${GITHUB_REF_NAME#v}"
           fi
+          # The key here must be "version": it is what the job output below and
+          # both downstream jobs read. Writing any other key leaves the output
+          # empty, and an empty version silently becomes the tag "v".
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Resolved version $v"
 
   package:
     name: Build Dentiva-Pro-Setup.exe
@@ -62,6 +67,17 @@ jobs:
       - name: Set the version
         run: |
           $v = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.ref_name }}" -replace '^v', '' }
+          # An empty version reaches package.json and then into the packaged
+          # application, where it is the build number a clinic is given when
+          # they ask for support. Stop here rather than after 20 minutes.
+          if ([string]::IsNullOrWhiteSpace($v)) {
+            Write-Error '::error::No version could be resolved from the tag or the workflow input.'
+            exit 1
+          }
+          if ($v -notmatch '^\d+\.\d+\.\d+') {
+            Write-Error "::error::'$v' is not a version number (expected MAJOR.MINOR.PATCH)."
+            exit 1
+          }
           $p = Get-Content package.json -Raw | ConvertFrom-Json
           $p.version = $v
           $p | ConvertTo-Json -Depth 20 | Set-Content package.json -Encoding utf8
@@ -169,10 +185,6 @@ jobs:
     needs: [verify, package]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # The release page is nice to have. The artefact is already uploaded above,
-    # so a permissions or network problem here must not fail the whole run —
-    # the installer is still downloadable from this run's artefacts.
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -218,17 +230,39 @@ jobs:
           draft: false
           prerelease: ${{ contains(needs.verify.outputs.version, '-') }}
 
+      # A green run must mean a real, correctly-tagged release with the
+      # installer on it. An empty version once produced a release on the tag
+      # "v" that nobody would ever find, and the run was green.
       - name: Confirm the release exists and carries the installer
         if: always()
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          tag="v${{ needs.verify.outputs.version }}"
-          echo "::group::Release $tag"
-          if gh release view "$tag" --json tagName,isDraft,url,assets \
-               --jq '"tag: \(.tagName)  draft: \(.isDraft)  \(.url)"' 2>&1; then
-            gh release view "$tag" --json assets --jq '.assets[] | "  \(.name)  \((.size/1048576*10|floor)/10) MB"'
-          else
-            echo "::error title=The GitHub Release was not created::$tag does not exist. The installer is still on this run's artefacts." 
+          version='${{ needs.verify.outputs.version }}'
+          tag="v${version}"
+
+          if [ -z "$version" ]; then
+            echo "::error title=No version was resolved::The verify job passed no version, so there is no tag to publish to. The installer is on this run's artefacts."
+            exit 1
           fi
+
+          if ! gh release view "$tag" --json tagName,isDraft,isPrerelease,url \
+               --jq '"tag: \(.tagName)  draft: \(.isDraft)  prerelease: \(.isPrerelease)", "url: \(.url)"'; then
+            echo "::error title=No release on the expected tag::$tag does not exist. The installer is on this run's artefacts."
+            exit 1
+          fi
+
+          names=$(gh release view "$tag" --json assets --jq '.assets[].name')
+          for required in Dentiva-Pro-Setup.exe Dentiva-Pro-Setup.exe.sha256 release-info.txt; do
+            if ! printf '%s\n' "$names" | grep -qx "$required"; then
+              echo "::error title=The release is missing a file::$required is not attached to $tag"
+              exit 1
+            fi
+          done
+
+          echo "::group::Assets on $tag"
+          gh release view "$tag" --json assets --jq '.assets[] | "  \(.name)  \((.size/1048576*100|floor)/100) MB"'
           echo "::endgroup::"
+          echo "Published $tag with $(printf '%s\n' "$names" | wc -l) files."
