@@ -89,8 +89,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "Dentiva-Pro-Setup.exe",
-      "publisherName": "Shohan Khan"
+      "artifactName": "Dentiva-Pro-Setup.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -108,5 +107,6 @@
     "compression": "maximum",
     "npmRebuild": false,
     "buildDependenciesFromSource": false
-  }
+  },
+  "homepage": "https://github.com/kshohanservice-glitch/Dentiva-Official"
 }

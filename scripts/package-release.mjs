@@ -18,6 +18,9 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSy
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -108,6 +111,69 @@ if (problems.length) {
 writeFileSync(join(ROOT, 'THIRD-PARTY-NOTICES.txt'), `${notices.join('\n')}\n`, 'utf8');
 console.log('\n  wrote THIRD-PARTY-NOTICES.txt');
 console.log(`  bundled ${readdirSync(LICENCE_DIR).length} licence texts into build-licenses/`);
+
+// ── 1b. The packaging configuration must match electron-builder's own schema ─
+heading('Validating the packaging configuration');
+
+/**
+ * electron-builder only checks this when it runs, on the machine doing the
+ * packaging — a Windows runner, minutes into a CI run. That is how a single
+ * unknown option in `win` stopped the first Windows build dead, and the log was
+ * not retrievable afterwards. It is checked here, in a second, against
+ * electron-builder's own published JSON schema, so the mistake cannot reach the
+ * runner at all.
+ */
+let validateSchema = null;
+let schemaProblem = null;
+for (const attempt of [
+  () => {
+    const AjvModule = require('ajv');
+    const schema = JSON.parse(JSON.stringify(require('app-builder-lib/scheme.json')));
+    delete schema.$schema;
+    const Ajv = AjvModule.default ?? AjvModule;
+    const ajv = new Ajv({ allowUnionTypes: true, strict: false, allErrors: true });
+    return ajv.compile(schema);
+  },
+]) {
+  try {
+    validateSchema = attempt();
+    break;
+  } catch (error) {
+    schemaProblem = error;
+  }
+}
+
+if (!validateSchema) {
+  console.log(`  the schema validator could not be loaded (${schemaProblem?.message ?? 'unknown'}); skipping.`);
+} else if (validateSchema(pkg.build)) {
+  console.log('  the packaging configuration matches electron-builder\'s published schema');
+} else {
+  for (const error of (validateSchema.errors ?? []).slice(0, 8)) {
+    const where = (error.instancePath || error.schemaPath || '(root)').replace(/^\$properties\./, '').replace(/\//g, '.');
+    console.error(`  ! ${where} ${error.message}${error.params?.additionalProperty ? ` (${error.params.additionalProperty})` : ''}`);
+  }
+  fail('the packaging configuration does not match electron-builder\'s schema.');
+}
+
+// The schema only proves the options exist. These are the promises this build
+// makes about the installer, and a schema cannot check any of them.
+const REQUIRED = [
+  [pkg.build?.win?.artifactName === 'Dentiva-Pro-Setup.exe', `the installer would be named "${pkg.build?.win?.artifactName}", not Dentiva-Pro-Setup.exe`],
+  [pkg.build?.nsis?.createStartMenuShortcut === true, 'a Start menu shortcut is required'],
+  [pkg.build?.nsis?.createDesktopShortcut === true, 'a desktop shortcut is required'],
+  [pkg.build?.nsis?.deleteAppDataOnUninstall === false, 'uninstalling must not delete a clinic\'s records'],
+  [pkg.build?.nsis?.oneClick === false, 'a one-click installer gives the user no say in where the program goes'],
+  [(pkg.build?.files ?? []).some((pattern) => String(pattern).includes('out/src')), 'the compiled main process is not included in the installer'],
+  [(pkg.build?.files ?? []).some((pattern) => String(pattern).includes('dist/renderer')), 'the renderer bundle is not included in the installer'],
+  [existsSync(join(ROOT, pkg.main ?? '')), `package.json "main" points at ${pkg.main}, which this build does not produce`],
+  [existsSync(join(ROOT, 'build', 'icon.ico')), 'build/icon.ico is missing, so the installer would ship the default icon'],
+];
+const broken = REQUIRED.filter(([ok]) => !ok).map(([, why]) => why);
+if (broken.length) {
+  for (const why of broken) console.error(`  ! ${why}`);
+  fail('the packaging configuration does not make the promises this build claims.');
+}
+console.log(`  installer name, shortcuts, data retention, file list and entry point all check out`);
 
 // ── 2. The renderer bundle must exist and must carry its fonts ──────────────
 heading('Checking the build output');
