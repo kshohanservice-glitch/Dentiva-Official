@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes an in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Audit the production dependency tree
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Typecheck the interface and the core
+        run: npm run typecheck
+
+      - name: Typecheck the main process and the scripts
+        run: npm run typecheck:node
+
+      - name: Run the test suite
+        run: npm test
+
+      - name: Build the renderer and the core
+        run: npm run build
+
+      - name: Prepare the release artefacts
+        run: node scripts/package-release.mjs
+
+      - name: Confirm the Bengali font reached the bundle
+        run: |
+          set -euo pipefail
+          if ! ls dist/renderer/assets/ | grep -q 'bengali.*\.woff2$'; then
+            echo "::error::no Noto Sans Bengali subset in the renderer bundle"
+            exit 1
+          fi
+          if ! ls dist/renderer/assets/ | grep -q '^inter.*\.woff2$'; then
+            echo "::error::no Inter subset in the renderer bundle"
+            exit 1
+          fi
+          ls -la dist/renderer/assets/ | grep -E 'bengali|inter' | head -20
+
+      - name: Confirm no activation material entered the build
+        run: |
+          set -euo pipefail
+          if grep -rEil "activation[_-]?(code|key)\s*[:=]\s*['\"][0-9A-Za-z-]{8,}['\"]" dist out; then
+            echo "::error::a possible activation literal was found in the build output"
+            exit 1
+          fi
+          echo "No activation literal in dist/ or out/."
+
+      # A measurement, not a correctness gate — but a real one, so it is not
+      # allowed to fail silently either. It has failed intermittently on some
+      # hosted runners for a reason the logs could not retrieve, so it is run
+      # twice before it is called a failure, and a retry is said out loud.
+      - name: Load profile at a reduced size
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          for attempt in 1 2; do
+            echo "::group::Load profile, attempt $attempt"
+            if npm run stress -- --patients 1500 --invoices 4000 2>&1 | tee stress.log; then
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            if [ "$attempt" = "1" ]; then
+              echo "::warning::The load profile failed on the first attempt and is being retried. If this is a real regression rather than a flaky runner, the second attempt will say so."
+            else
+              {
+                echo "## Load profile failed"
+                echo
+                echo '```'
+                cat stress.log
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
+
+      - name: Upload the load profile output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-profile
+          path: stress.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload the release preparation artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-preparation
+          path: |
+            THIRD-PARTY-NOTICES.txt
+            build-manifest.json
+          if-no-files-found: warn
+          retention-days: 30

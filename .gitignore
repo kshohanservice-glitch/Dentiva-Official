@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+release/
+build-licenses/
+build-manifest.json
+THIRD-PARTY-NOTICES.txt
+.vite/
+*.tsbuildinfo
+
+# Local application data — never commit a clinic's real data
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+attachments/
+exports/
+logs/
+DentivaPro_Backup_*/
+
+# Test scratch
+coverage/
+/tmp/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Secrets and credentials must never be committed
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12

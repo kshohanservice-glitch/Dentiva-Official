@@ -1,0 +1,246 @@
+/* ==========================================================================
+   Dentiva Pro — Design tokens
+   Single source of truth for colour, type, spacing, radius, elevation, motion
+   and density. No component may introduce a raw colour or size literal.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ── Brand ───────────────────────────────────────────────────────────── */
+  --brand-050: #ecfdf9;
+  --brand-100: #d2f5ee;
+  --brand-200: #a6e9de;
+  --brand-300: #6ad7c9;
+  --brand-400: #34bcae;
+  --brand-500: #12a192;
+  --brand-600: #0a8076;
+  --brand-700: #0b6760;
+  --brand-800: #0d524d;
+  --brand-900: #104440;
+
+  --accent-100: #dbeafe;
+  --accent-300: #93c5fd;
+  --accent-500: #3b82f6;
+  --accent-600: #2563eb;
+  --accent-700: #1d4ed8;
+
+  /* ── Neutrals ────────────────────────────────────────────────────────── */
+  --bg: #eef2f5;
+  --bg-grad: radial-gradient(1200px 600px at 12% -10%, #ffffff 0%, #eef2f5 55%, #e8eef2 100%);
+  --surface: #ffffff;
+  --surface-2: #f7f9fb;
+  --surface-3: #eef3f6;
+  --surface-inset: #f2f6f8;
+  --overlay: rgba(15, 23, 42, 0.44);
+
+  --border: #e2e8f0;
+  --border-soft: #eef2f6;
+  --border-strong: #cbd5e1;
+
+  --fg-1: #0f1e2e;
+  --fg-2: #4a5b6a;
+  --fg-3: #8595a3;
+  --fg-inverse: #ffffff;
+
+  /* ── Semantic ────────────────────────────────────────────────────────── */
+  --primary: var(--brand-600);
+  --primary-hover: var(--brand-700);
+  --primary-active: var(--brand-800);
+  --primary-soft: var(--brand-050);
+  --primary-soft-border: var(--brand-200);
+  --on-primary: #ffffff;
+
+  --ok: #067a56;
+  --ok-600: #059669;
+  --ok-soft: #e7f7f0;
+  --ok-border: #a9e3ca;
+
+  --warn: #a45c07;
+  --warn-600: #d97706;
+  --warn-soft: #fdf3e3;
+  --warn-border: #f2d3a1;
+
+  --danger: #b42318;
+  --danger-600: #dc2626;
+  --danger-soft: #fdecea;
+  --danger-border: #f4b8b2;
+
+  --info: var(--accent-700);
+  --info-soft: #e8f0fe;
+  --info-border: var(--accent-300);
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  /* Noto Sans Bengali closes the sans stack on purpose. Inter has no Bengali
+     and no taka sign (U+09F3), so without it the browser would fall through
+     to whatever the machine happened to have installed — which is how a
+     receipt comes out with a box where ৳ should be. The bundled subset
+     declares U+0980-09FE, so both the script and the sign resolve offline. */
+  --font-sans: 'Inter Variable', 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, 'Noto Sans Bengali', sans-serif;
+  --font-bengali: 'Noto Sans Bengali', 'Nirmala UI', 'Vrinda', 'Shonar Bangla', var(--font-sans);
+  --font-mono: 'Cascadia Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --fs-2xs: 0.6875rem;  /* 11px */
+  --fs-xs: 0.75rem;     /* 12px */
+  --fs-sm: 0.8125rem;   /* 13px */
+  --fs-base: 0.875rem;  /* 14px */
+  --fs-md: 0.9375rem;   /* 15px */
+  --fs-lg: 1.0625rem;   /* 17px */
+  --fs-xl: 1.25rem;     /* 20px */
+  --fs-2xl: 1.5rem;     /* 24px */
+  --fs-3xl: 1.875rem;   /* 30px */
+  --fs-4xl: 2.25rem;    /* 36px */
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.65;
+
+  --tracking-tight: -0.011em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-caps: 0.06em;
+
+  /* ── Spacing (4px base) ──────────────────────────────────────────────── */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 48px;
+  --sp-10: 64px;
+
+  /* ── Radius ──────────────────────────────────────────────────────────── */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
+  --r-pill: 999px;
+
+  /* ── Elevation ───────────────────────────────────────────────────────── */
+  --sh-1: 0 1px 2px rgba(15, 30, 46, 0.05), 0 1px 3px rgba(15, 30, 46, 0.04);
+  --sh-2: 0 2px 4px rgba(15, 30, 46, 0.05), 0 4px 10px rgba(15, 30, 46, 0.06);
+  --sh-3: 0 6px 16px rgba(15, 30, 46, 0.08), 0 2px 6px rgba(15, 30, 46, 0.05);
+  --sh-4: 0 18px 40px rgba(15, 30, 46, 0.14), 0 6px 14px rgba(15, 30, 46, 0.08);
+  --sh-focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-500);
+
+  /* ── Control metrics ─────────────────────────────────────────────────── */
+  --h-control-sm: 30px;
+  --h-control: 36px;
+  --h-control-lg: 42px;
+  --w-sidebar: 244px;
+  --w-sidebar-collapsed: 62px;
+  --h-topbar: 56px;
+  --row-h: 44px;
+  --row-h-compact: 36px;
+  --sidebar-item-h: 38px;
+  --icon-sm: 15px;
+  --icon: 18px;
+  --icon-lg: 22px;
+  --table-cell-x: 14px;
+  --table-cell-y: 10px;
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --dur-1: 110ms;
+  --dur-2: 160ms;
+  --dur-3: 220ms;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --z-sticky: 20;
+  --z-dropdown: 50;
+  --z-topbar: 40;
+  --z-drawer: 60;
+  --z-modal: 80;
+  --z-toast: 100;
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────────────── */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0b141b;
+  --bg-grad: radial-gradient(1200px 600px at 12% -10%, #13212b 0%, #0b141b 55%, #080f14 100%);
+  --surface: #111d26;
+  --surface-2: #16242f;
+  --surface-3: #1c2d3a;
+  --surface-inset: #0e1820;
+  --overlay: rgba(2, 8, 12, 0.66);
+
+  --border: #233643;
+  --border-soft: #1b2b36;
+  --border-strong: #35505f;
+
+  --fg-1: #e8f1f6;
+  --fg-2: #a7bac7;
+  --fg-3: #6f8595;
+
+  --brand-050: #0d2b2a;
+  --brand-100: #10403d;
+  --brand-200: #145851;
+  --brand-500: #2bc2b1;
+  --brand-600: #22a99a;
+  --primary: #2bc2b1;
+  --primary-hover: #46d2c2;
+  --primary-active: #6fe0d3;
+  --primary-soft: #0f2e2c;
+  --primary-soft-border: #1c514c;
+  --on-primary: #05201e;
+
+  --ok: #3ecf9a;
+  --ok-soft: #0d2a20;
+  --ok-border: #1d5343;
+  --warn: #e6a445;
+  --warn-soft: #2b2011;
+  --warn-border: #59411b;
+  --danger: #f2837b;
+  --danger-soft: #2e1614;
+  --danger-border: #5e2b26;
+  --info: #7fb0ff;
+  --info-soft: #12213b;
+  --info-border: #2a4677;
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --sh-3: 0 8px 20px rgba(0, 0, 0, 0.5);
+  --sh-4: 0 20px 48px rgba(0, 0, 0, 0.6);
+  --sh-focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-400);
+}
+
+/* ── Compact density ────────────────────────────────────────────────────── */
+[data-density='compact'] {
+  --row-h: 36px;
+  --row-h-compact: 30px;
+  --h-control: 32px;
+  --h-control-sm: 28px;
+  --table-cell-y: 6px;
+  --table-cell-x: 10px;
+  --sidebar-item-h: 32px;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+  }
+}
+
+[data-motion='off'] * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
