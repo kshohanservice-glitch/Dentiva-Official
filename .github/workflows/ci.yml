@@ -90,7 +90,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
-      - name: Upload the diagnostics bundle
+      - name: Upload the load profile output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-profile
+          path: stress.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload the release preparation artefacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
