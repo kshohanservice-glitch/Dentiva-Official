@@ -10,6 +10,10 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5183,
     strictPort: true,
+    // The dev server is reached through whatever hostname forwards to this
+    // machine, so host checking is relaxed here and only here. The packaged
+    // app loads from file:// and never starts this server.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: process.env.DENTIVA_API_URL ?? 'http://127.0.0.1:5184',
