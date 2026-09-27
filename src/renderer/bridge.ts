@@ -222,12 +222,22 @@ function createBrowserBridge(): HostBridge {
 }
 
 let bridge: HostBridge | null = null;
+/** The host object `bridge` was built from, so a reload replaces it. */
+let bridgeHost: unknown = null;
 
 export function getBridge(): HostBridge {
-  if (bridge) return bridge;
   const host = window.dentivaHost;
+  if (host) {
+    // Rebuild if the preload has been replaced, so a reloaded window never
+    // keeps talking to a host that has gone away.
+    if (bridge && bridgeHost === host) return bridge;
+    bridgeHost = host;
+  } else if (bridge && bridgeHost === null) {
+    return bridge;
+  }
   if (!host) {
     bridge = createBrowserBridge();
+    bridgeHost = null;
     return bridge;
   }
   const electronBridge: HostBridge = {

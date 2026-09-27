@@ -35,10 +35,23 @@ interface ItemPage {
   pageCount: number;
 }
 
+interface AlertBatch {
+  batch_id: number;
+  item_id: number;
+  sku: string;
+  name: string;
+  unit: string;
+  batch_no: string;
+  expiry_date: string;
+  quantity: number;
+}
+
 interface AlertSummary {
-  low: { id: number; sku: string; name: string; current_stock: number; min_stock: number; unit: string }[];
-  expiring: { batch_id: number; item_id: number; sku: string; name: string; batch_no: string; expiry_date: string; remaining: number; unit: string }[];
-  expired: { batch_id: number; item_id: number; sku: string; name: string; batch_no: string; expiry_date: string; remaining: number; unit: string }[];
+  lowStock: { id: number; sku: string; name: string; current_stock: number; min_stock: number; unit: string }[];
+  outOfStock: { id: number; sku: string; name: string; current_stock: number; unit: string }[];
+  expiring: AlertBatch[];
+  expired: AlertBatch[];
+  alertDays: number;
 }
 
 interface Valuation {
@@ -46,6 +59,7 @@ interface Valuation {
   totalUnits: number;
   costValuePoisha: number;
   retailValuePoisha: number;
+  purchasedLast30DaysPoisha: number;
 }
 
 type StockAction = 'in' | 'out' | 'dispose' | 'adjust';
@@ -98,7 +112,7 @@ export function InventoryPage({ itemId }: { itemId?: string }): JSX.Element {
     toast.success('Inventory export ready', `${result.rows} rows${saved.saved ? '' : ' — cancelled'}.`);
   };
 
-  const totalAlerts = (alerts.data?.low.length ?? 0) + (alerts.data?.expiring.length ?? 0) + (alerts.data?.expired.length ?? 0);
+  const totalAlerts = (alerts.data?.lowStock.length ?? 0) + (alerts.data?.expiring.length ?? 0) + (alerts.data?.expired.length ?? 0);
 
   if (selected) {
     return (
@@ -143,8 +157,8 @@ export function InventoryPage({ itemId }: { itemId?: string }): JSX.Element {
         <div className="stat-grid stat-grid--compact">
           <Stat label="Stock value (cost)" value={money(valuation.data.costValuePoisha, app.prefs, { decimals: 0 })} icon="database" tone="primary" />
           <Stat label="Retail value" value={money(valuation.data.retailValuePoisha, app.prefs, { decimals: 0 })} icon="trending-up" tone="ok" />
-          <Stat label="Low stock items" value={alerts.data?.low.length ?? '—'} icon="alert-triangle" tone="warn" />
-          <Stat label="Expiring batches" value={totalAlerts - (alerts.data?.low.length ?? 0)} icon="clock" tone={totalAlerts > 0 ? 'danger' : 'ok'} />
+          <Stat label="Low stock items" value={alerts.data?.lowStock.length ?? '—'} icon="alert-triangle" tone="warn" />
+          <Stat label="Expiring batches" value={totalAlerts - (alerts.data?.lowStock.length ?? 0)} icon="clock" tone={totalAlerts > 0 ? 'danger' : 'ok'} />
         </div>
       ) : null}
 
@@ -165,7 +179,7 @@ export function InventoryPage({ itemId }: { itemId?: string }): JSX.Element {
                   {batch.name} expires {date(batch.expiry_date, app.prefs)}
                 </Badge>
               ))}
-              {alerts.data.low.map((item) => (
+              {alerts.data.lowStock.map((item) => (
                 <Badge key={`low-${item.id}`} tone="warn">
                   {item.name}: {item.current_stock}/{item.min_stock} {item.unit}
                 </Badge>

@@ -380,8 +380,20 @@ export const inventoryApi: ApiSpec = {
           `SELECT COALESCE(SUM(t.quantity * t.unit_cost_poisha), 0) AS v FROM inventory_transactions t WHERE t.type = 'in' AND t.performed_at >= ?`,
           [`${shiftDate(toLocalDateKey(new Date()), -30)}`],
         );
+        const totals = c.db.get<{ items: number; units: number; retail: number }>(
+          `SELECT COUNT(*) AS items,
+                  COALESCE(SUM(i.current_stock), 0) AS units,
+                  COALESCE(SUM(i.current_stock * i.selling_price_poisha), 0) AS retail
+             FROM inventory_items i WHERE i.is_active = 1`,
+        );
         return {
+          // Cost is what the clinic actually paid for the stock still on hand.
+          costValuePoisha: Number(total?.v ?? 0),
+          // Retail is what the same stock would fetch at the listed selling price.
+          retailValuePoisha: Number(totals?.retail ?? 0),
           stockValuePoisha: Number(total?.v ?? 0),
+          totalItems: Number(totals?.items ?? 0),
+          totalUnits: Number(totals?.units ?? 0),
           purchasedLast30DaysPoisha: Number(purchases?.v ?? 0),
           byCategory,
         };

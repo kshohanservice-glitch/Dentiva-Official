@@ -68,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
     () =>
       NAVIGATION.map((group) => ({
         ...group,
-        items: group.items.filter((item) => !item.permission || app.has(item.permission) || group.id === 'administration' && item.id === 'about'),
+        items: group.items.filter((item) => item.permissions.length === 0 || app.hasAny(...item.permissions)),
       })).filter((group) => group.items.length > 0),
     [app],
   );
@@ -389,7 +389,7 @@ function CommandPalette({ onClose }: { onClose: () => void }): JSX.Element {
   const quickLinks = useMemo(
     () =>
       NAVIGATION.flatMap((group) => group.items)
-        .filter((item) => !item.permission || app.has(item.permission))
+        .filter((item) => item.permissions.length === 0 || app.hasAny(...item.permissions))
         .filter((item) => item.label.toLowerCase().includes(query.trim().toLowerCase()))
         .slice(0, 6)
         .map((item) => ({ id: -1, code: '', title: item.label, subtitle: groupLabelFor(item.path), kind: 'nav', route: item.path })),
